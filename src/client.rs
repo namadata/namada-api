@@ -1,10 +1,12 @@
+use std::sync::Arc;
+use thiserror::Error;
+use tracing::{debug, error, info};
+use reqwest::Client;
 use tendermint_rpc::{HttpClient, Url};
 use namada_core::address::Address;
 use namada_core::chain::Epoch;
 use namada_proof_of_stake::types::{LivenessInfo, ValidatorMetaData, CommissionPair, ValidatorStateInfo};
 use namada_sdk::rpc;
-use thiserror::Error;
-use tracing::info;
 use std::str::FromStr;
 
 #[derive(Error, Debug)]
@@ -18,23 +20,38 @@ pub enum ClientError {
 }
 
 pub struct NamadaClient {
-    rpc_client: HttpClient,
+    rpc_client: Client,
     rpc_url: String,
 }
 
 impl NamadaClient {
-    pub async fn new(rpc_url: String) -> Result<Self, ClientError> {
+    pub fn new(rpc_url: String) -> Self {
         info!("Initializing Namada client with RPC URL: {}", rpc_url);
-        let url = Url::from_str(&rpc_url)
-            .map_err(|e| ClientError::InvalidUrl(e.to_string()))?;
-        let rpc_client = HttpClient::new(url)
-            .map_err(|e| ClientError::ConnectionError(e.to_string()))?;
-        Ok(Self { rpc_client, rpc_url })
+        Self {
+            rpc_client: Client::new(),
+            rpc_url,
+        }
     }
 
     pub async fn check_connection(&self) -> Result<(), ClientError> {
-        // Try a simple health check (e.g., get epoch)
-        self.query_epoch().await.map(|_| ())
+        debug!("Checking connection to Namada RPC at {}", self.rpc_url);
+        match self.rpc_client.get(&self.rpc_url).send().await {
+            Ok(response) if response.status().is_success() => {
+                info!("Successfully connected to Namada RPC");
+                Ok(())
+            },
+            Ok(response) => {
+                let status = response.status();
+                let error_msg = format!("RPC endpoint returned non-success status: {}", status);
+                error!("{}", error_msg);
+                Err(ClientError::ConnectionError(error_msg))
+            },
+            Err(e) => {
+                let error_msg = format!("Failed to connect to RPC endpoint: {}", e);
+                error!("{}", error_msg);
+                Err(ClientError::ConnectionError(error_msg))
+            }
+        }
     }
 
     pub fn rpc_url(&self) -> &str {

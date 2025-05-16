@@ -27,8 +27,10 @@ pub struct Config {
 
 impl Config {
     pub fn load(args: CliArgs) -> Result<Self, ConfigError> {
+        // First load from .env file
         let _ = dotenvy::dotenv();
-
+        
+        // Initialize with defaults
         let mut config = Config {
             rpc_url: std::env::var("NAMADA_RPC_URL")
                 .unwrap_or_else(|_| "http://localhost:26657".to_string()),
@@ -38,24 +40,21 @@ impl Config {
                 .unwrap_or(3000),
             cors_allowed_origins: vec!["*".to_string()],
         };
-
-        if let Some(config_path) = args.config {
-            // Optionally: load and merge config from file (not implemented for brevity)
-            let _ = config_path;
-        }
-
+        
+        // Override with CLI args
         if let Some(rpc_url) = args.rpc_url {
             config.rpc_url = rpc_url;
         }
-
+        
         if args.port != 0 {
             config.port = args.port;
         }
-
+        
+        // Validate configuration
         if !is_valid_url(&config.rpc_url) {
             return Err(ConfigError::InvalidRpcUrl(config.rpc_url));
         }
-
+        
         Ok(config)
     }
 }

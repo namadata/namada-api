@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 # Web framework
-axum = { version = "0.6", features = ["json"] }
+axum = { version = "0.7", features = ["json"] }
 axum-macros = "0.3"
-tower-http = { version = "0.4", features = ["cors", "trace"] }
-tokio = { version = "1.8", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tokio = { version = "1.36", features = ["full"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -38,4 +38,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Utilities
 thiserror = "1.0"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"] }
+tower = "0.4"
+futures = "0.3"
+async-trait = "0.1"
