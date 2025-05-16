@@ -1,28 +1,10 @@
-use axum::{extract::{Path, State}, Json, routing::get, Router, response::IntoResponse};
+use axum::{extract::{Path, State}, Json, routing::get, Router, response::{IntoResponse, Response}, http::StatusCode};
 use std::sync::Arc;
 use crate::state::AppState;
 use crate::models::pos::*;
 use crate::models::error::ApiError;
 use namada_core::address::Address;
 use std::str::FromStr;
-
-// Helper conversion to make ApiError work with Axum
-impl IntoResponse for ApiError {
-    fn into_response(self) -> axum::response::Response {
-        let (status, error_message) = match self {
-            ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
-            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
-            ApiError::QueryError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-            ApiError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-        };
-        
-        let body = Json(serde_json::json!({
-            "error": error_message
-        }));
-        
-        (status, body).into_response()
-    }
-}
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -34,7 +16,7 @@ pub fn router() -> Router<Arc<AppState>> {
 
 pub async fn get_liveness_info(
     State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+) -> Response {
     match state.namada_client.get_liveness_info().await {
         Ok(liveness_info) => {
             let response = LivenessInfoResponse {
@@ -55,7 +37,7 @@ pub async fn get_liveness_info(
 pub async fn get_validator_details(
     State(state): State<Arc<AppState>>,
     Path(address_str): Path<String>,
-) -> impl IntoResponse {
+) -> Response {
     let address = match Address::from_str(&address_str) {
         Ok(addr) => addr,
         Err(_) => return ApiError::BadRequest("Invalid address format".to_string()).into_response()
@@ -107,12 +89,12 @@ pub async fn get_validator_details(
 
 pub async fn get_validators(
     State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+) -> Response {
     let epoch = state.namada_client.query_epoch().await.ok();
     
     match state.namada_client.get_all_validators(epoch).await {
         Ok(validators) => {
-            let result = validators.into_iter().map(|addr| ValidatorResponse { 
+            let result: Vec<ValidatorResponse> = validators.into_iter().map(|addr| ValidatorResponse { 
                 address: addr.to_string() 
             }).collect();
             Json(result).into_response()
@@ -124,7 +106,7 @@ pub async fn get_validators(
 pub async fn get_delegations(
     State(state): State<Arc<AppState>>,
     Path(address_str): Path<String>,
-) -> impl IntoResponse {
+) -> Response {
     let address = match Address::from_str(&address_str) {
         Ok(addr) => addr,
         Err(_) => return ApiError::BadRequest("Invalid address format".to_string()).into_response()
