@@ -6,6 +6,7 @@ use namada_core::address::Address;
 use namada_core::chain::Epoch;
 use namada_proof_of_stake::types::{LivenessInfo, ValidatorMetaData, CommissionPair, ValidatorStateInfo};
 use namada_sdk::rpc;
+use namada_sdk::queries::RPC;
 use std::str::FromStr;
 use tokio::task::spawn_blocking;
 
@@ -146,6 +147,40 @@ impl NamadaClient {
         spawn_blocking(move || {
             tokio::runtime::Handle::current().block_on(async {
                 rpc::get_delegation_validators(&client, &address, epoch).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+        .map(|set| set.into_iter().collect())
+    }
+
+    pub async fn get_consensus_validator_set(&self, epoch: Option<Epoch>) -> Result<Vec<namada_proof_of_stake::types::WeightedValidator>, ClientError> {
+        let epoch = match epoch {
+            Some(e) => e,
+            None => self.query_epoch().await?,
+        };
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                RPC.vp().pos().consensus_validator_set(&client, &Some(epoch)).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+        .map(|set| set.into_iter().collect())
+    }
+
+    pub async fn get_below_capacity_validator_set(&self, epoch: Option<Epoch>) -> Result<Vec<namada_proof_of_stake::types::WeightedValidator>, ClientError> {
+        let epoch = match epoch {
+            Some(e) => e,
+            None => self.query_epoch().await?,
+        };
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                RPC.vp().pos().below_capacity_validator_set(&client, &Some(epoch)).await
             })
         })
         .await

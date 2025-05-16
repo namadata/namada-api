@@ -46,4 +46,15 @@ pub struct DelegationsResponse {
 pub struct Delegation {
     pub validator: String,
     pub amount: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ValidatorSetResponse {
+    pub validators: Vec<WeightedValidatorResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WeightedValidatorResponse {
+    pub address: String,
+    pub stake: String,
 } 

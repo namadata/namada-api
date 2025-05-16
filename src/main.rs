@@ -101,6 +101,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|query: ValidatorsQuery, state: Arc<AppState>| async move {
             get_validators(state, query.page, query.per_page).await
         });
+
+    let consensus_validator_set = warp::path("api")
+        .and(warp::path("pos"))
+        .and(warp::path("validator_set"))
+        .and(warp::path("consensus"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(get_consensus_validator_set);
+
+    let below_capacity_validator_set = warp::path("api")
+        .and(warp::path("pos"))
+        .and(warp::path("validator_set"))
+        .and(warp::path("below_capacity"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(get_below_capacity_validator_set);
     
     // Combine all routes
     let routes = docs
@@ -110,6 +126,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(validator_by_tm)
         .or(validator_details)
         .or(validators)
+        .or(consensus_validator_set)
+        .or(below_capacity_validator_set)
         .with(warp::cors().allow_any_origin())
         .recover(handle_rejection);
     
@@ -431,6 +449,66 @@ async fn get_validators(
     })))
 }
 
+/// Get consensus validator set
+/// 
+/// # Endpoint
+/// `GET /api/pos/validator_set/consensus`
+/// 
+/// # Response
+/// ```json
+/// {
+///     "validators": [
+///         {
+///             "address": "tnam1q...",
+///             "stake": "1000000"
+///         }
+///     ]
+/// }
+/// ```
+async fn get_consensus_validator_set(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    let validators = state.namada_client.get_consensus_validator_set(None).await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    let response = ValidatorSetResponse {
+        validators: validators.into_iter().map(|v| WeightedValidatorResponse {
+            address: v.address.to_string(),
+            stake: v.bonded_stake.to_string(),
+        }).collect(),
+    };
+    
+    Ok(warp::reply::json(&response))
+}
+
+/// Get below-capacity validator set
+/// 
+/// # Endpoint
+/// `GET /api/pos/validator_set/below_capacity`
+/// 
+/// # Response
+/// ```json
+/// {
+///     "validators": [
+///         {
+///             "address": "tnam1q...",
+///             "stake": "1000000"
+///         }
+///     ]
+/// }
+/// ```
+async fn get_below_capacity_validator_set(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    let validators = state.namada_client.get_below_capacity_validator_set(None).await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    let response = ValidatorSetResponse {
+        validators: validators.into_iter().map(|v| WeightedValidatorResponse {
+            address: v.address.to_string(),
+            stake: v.bonded_stake.to_string(),
+        }).collect(),
+    };
+    
+    Ok(warp::reply::json(&response))
+}
+
 /// Serve API documentation
 /// 
 /// # Endpoint
@@ -609,6 +687,40 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
         "per_page": 10,
         "total_pages": 10
     }
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <h3>Get Consensus Validator Set</h3>
+            <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/consensus</span></p>
+            <p>Get all validators in the consensus set with their bonded stake.</p>
+            <div class="response">
+                <h4>Response:</h4>
+                <pre><code>{
+    "validators": [
+        {
+            "address": "tnam1q...",
+            "stake": "1000000"
+        }
+    ]
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <h3>Get Below-Capacity Validator Set</h3>
+            <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/below_capacity</span></p>
+            <p>Get all validators in the below-capacity set with their bonded stake.</p>
+            <div class="response">
+                <h4>Response:</h4>
+                <pre><code>{
+    "validators": [
+        {
+            "address": "tnam1q...",
+            "stake": "1000000"
+        }
+    ]
 }</code></pre>
             </div>
         </div>
