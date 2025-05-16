@@ -14,6 +14,7 @@ use tracing::{info, error};
 
 use crate::config::{CliArgs, Config};
 use crate::state::AppState;
+use crate::routes::{health, pos};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,8 +37,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods(Any)
         .allow_headers(Any);
     let app = Router::new()
-        .merge(routes::health::router())
-        .merge(routes::pos::router())
+        .merge(health::router())
+        .merge(pos::router())
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
