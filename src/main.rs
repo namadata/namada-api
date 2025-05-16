@@ -27,6 +27,27 @@ struct ValidatorsQuery {
     per_page: Option<u32>,
 }
 
+impl ValidatorsQuery {
+    fn validate(&self) -> Result<(), ApiError> {
+        if let Some(page) = self.page {
+            if page == 0 {
+                return Err(ApiError::InvalidPagination("Page number must be greater than 0".to_string()));
+            }
+        }
+        
+        if let Some(per_page) = self.per_page {
+            if per_page == 0 {
+                return Err(ApiError::InvalidPagination("Items per page must be greater than 0".to_string()));
+            }
+            if per_page > 50 {
+                return Err(ApiError::InvalidPagination("Items per page cannot exceed 50".to_string()));
+            }
+        }
+        
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
@@ -92,14 +113,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get_validator_details(state, address).await
         });
         
-    let validators = warp::path("api")
+    let all_validators = warp::path("api")
         .and(warp::path("pos"))
         .and(warp::path("validators"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(get_all_validators);
+        
+    let validators_details = warp::path("api")
+        .and(warp::path("pos"))
+        .and(warp::path("validators_details"))
         .and(warp::get())
         .and(warp::query::<ValidatorsQuery>())
         .and(with_state(state.clone()))
         .and_then(|query: ValidatorsQuery, state: Arc<AppState>| async move {
-            get_validators(state, query.page, query.per_page).await
+            get_validators_details(state, query).await
         });
 
     let consensus_validator_set = warp::path("api")
@@ -125,7 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(liveness_info)
         .or(validator_by_tm)
         .or(validator_details)
-        .or(validators)
+        .or(all_validators)
+        .or(validators_details)
         .or(consensus_validator_set)
         .or(below_capacity_validator_set)
         .with(warp::cors().allow_any_origin())
@@ -263,6 +292,32 @@ async fn get_validator_by_tm_addr(
     state: Arc<AppState>,
     tm_addr: String,
 ) -> Result<impl Reply, Rejection> {
+    // Validate Tendermint address format
+    if tm_addr.is_empty() {
+        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress("Tendermint address cannot be empty".to_string())));
+    }
+    
+    // Tendermint addresses should be bech32m encoded and start with "tnam"
+    if !tm_addr.starts_with("tnam") {
+        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
+            "Tendermint address must be bech32m encoded and start with 'tnam'".to_string()
+        )));
+    }
+    
+    // Tendermint addresses should not contain special characters
+    if tm_addr.contains(|c: char| !c.is_alphanumeric() && c != '1' && c != 'q' && c != 'p' && c != 'z' && c != 'r' && c != 'y' && c != '9' && c != 'x' && c != '8' && c != 'g' && c != 'f' && c != '2' && c != 't' && c != 'v' && c != 'd' && c != 'w' && c != '0' && c != 's' && c != '3' && c != 'j' && c != 'n' && c != '5' && c != '4' && c != 'k' && c != 'h' && c != 'c' && c != 'e' && c != '6' && c != 'm' && c != 'u' && c != 'a' && c != '7' && c != 'l') {
+        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
+            "Tendermint address contains invalid characters".to_string()
+        )));
+    }
+    
+    // Tendermint addresses should be between 39 and 45 characters
+    if tm_addr.len() < 39 || tm_addr.len() > 45 {
+        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
+            format!("Tendermint address must be between 39 and 45 characters, got {}", tm_addr.len())
+        )));
+    }
+    
     let epoch = state.namada_client.query_epoch().await
         .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
     
@@ -277,11 +332,11 @@ async fn get_validator_by_tm_addr(
     // Find validator with matching Tendermint address
     let validator = liveness_info.validators.iter()
         .find(|v| v.comet_address == tm_addr)
-        .ok_or_else(|| warp::reject::custom(ApiError::NotFound("Validator not found".to_string())))?;
+        .ok_or_else(|| warp::reject::custom(ApiError::NotFound(format!("No validator found with Tendermint address {}", tm_addr))))?;
     
     // Verify the validator is in the active set
     if !validators.contains(&validator.native_address) {
-        return Err(warp::reject::custom(ApiError::NotFound("Validator not in active set".to_string())));
+        return Err(warp::reject::custom(ApiError::NotFound(format!("Validator {} is not in the active set", validator.native_address))));
     }
     
     Ok(warp::reply::json(&ValidatorResponse {
@@ -317,18 +372,20 @@ async fn get_validator_details(
     state: Arc<AppState>,
     address: String,
 ) -> Result<impl Reply, Rejection> {
+    // Validate address format
     let address = Address::from_str(&address)
-        .map_err(|e| warp::reject::custom(ApiError::BadRequest(format!("Invalid address format: {}", e))))?;
+        .map_err(|e| warp::reject::custom(ApiError::InvalidAddress(format!("Invalid address format: {}", e))))?;
     
-    let epoch = state.namada_client.query_epoch().await
-        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
-    
+    // Check if address is a validator
     let is_validator = state.namada_client.is_validator(&address).await
         .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
     
     if !is_validator {
-        return Err(warp::reject::custom(ApiError::NotFound("Address is not a validator".to_string())));
+        return Err(warp::reject::custom(ApiError::NotFound(format!("Address {} is not a validator", address))));
     }
+    
+    let epoch = state.namada_client.query_epoch().await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
     
     let (state_info, epoch) = state.namada_client.get_validator_state(&address, Some(epoch)).await
         .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
@@ -354,10 +411,36 @@ async fn get_validator_details(
     }))
 }
 
-/// Get list of all validators
+/// Get list of all validators (simple list)
 /// 
 /// # Endpoint
-/// `GET /api/pos/validators?page={page}&per_page={per_page}`
+/// `GET /api/pos/validators`
+/// 
+/// # Response
+/// ```json
+/// {
+///     "validators": [
+///         "tnam1q...",
+///         "tnam1q..."
+///     ]
+/// }
+/// ```
+async fn get_all_validators(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    let epoch = state.namada_client.query_epoch().await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    let validators = state.namada_client.get_all_validators(Some(epoch)).await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    Ok(warp::reply::json(&serde_json::json!({
+        "validators": validators.into_iter().map(|addr| addr.to_string()).collect::<Vec<String>>()
+    })))
+}
+
+/// Get detailed information about all validators with pagination
+/// 
+/// # Endpoint
+/// `GET /api/pos/validators_details?page={page}&per_page={per_page}`
 /// 
 /// # Parameters
 /// - `page`: Page number (default: 1)
@@ -389,14 +472,16 @@ async fn get_validator_details(
 ///     }
 /// }
 /// ```
-async fn get_validators(
+async fn get_validators_details(
     state: Arc<AppState>,
-    page: Option<u32>,
-    per_page: Option<u32>,
+    query: ValidatorsQuery,
 ) -> Result<impl Reply, Rejection> {
-    // Set default values and validate parameters
-    let page = page.unwrap_or(1);
-    let per_page = per_page.unwrap_or(10).min(50); // Cap at 50 validators per page
+    // Validate query parameters
+    query.validate()?;
+    
+    // Set default values
+    let page = query.page.unwrap_or(1);
+    let per_page = query.per_page.unwrap_or(10);
     
     let epoch = state.namada_client.query_epoch().await
         .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
@@ -406,6 +491,13 @@ async fn get_validators(
     
     let total = validators.len();
     let total_pages = (total as f64 / per_page as f64).ceil() as u32;
+    
+    // Validate page number against total pages
+    if page > total_pages && total_pages > 0 {
+        return Err(warp::reject::custom(ApiError::InvalidPagination(
+            format!("Page number {} exceeds total pages {}", page, total_pages)
+        )));
+    }
     
     // Calculate start and end indices for the current page
     let start = ((page - 1) * per_page) as usize;
@@ -561,6 +653,13 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
                 padding: 15px;
                 margin: 10px 0;
             }
+            .error {
+                background: #ffebee;
+                border: 1px solid #ffcdd2;
+                border-radius: 4px;
+                padding: 15px;
+                margin: 10px 0;
+            }
             pre {
                 background: #f8f9fa;
                 padding: 15px;
@@ -569,6 +668,19 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
             }
             code {
                 font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            }
+            .params {
+                margin: 10px 0;
+            }
+            .param {
+                margin: 5px 0;
+            }
+            .param-name {
+                font-weight: bold;
+                color: #2c3e50;
+            }
+            .param-desc {
+                color: #666;
             }
         </style>
     </head>
@@ -595,9 +707,15 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
             <p><span class="method">GET</span> <span class="path">/api/health/rpc</span></p>
             <p>Check if the RPC connection is working.</p>
             <div class="response">
-                <h4>Response:</h4>
+                <h4>Success Response:</h4>
                 <pre><code>{
     "status": "ok",
+    "rpc_url": "https://rpc-1.namada.nodes.guru"
+}</code></pre>
+                <h4>Error Response:</h4>
+                <pre><code>{
+    "status": "error",
+    "message": "RPC connection error: ...",
     "rpc_url": "https://rpc-1.namada.nodes.guru"
 }</code></pre>
             </div>
@@ -629,10 +747,24 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
             <h3>Get Validator by Tendermint Address</h3>
             <p><span class="method">GET</span> <span class="path">/api/pos/validators/tm/{tm_addr}</span></p>
             <p>Get validator information by their Tendermint address.</p>
+            <div class="params">
+                <div class="param">
+                    <span class="param-name">tm_addr</span>: <span class="param-desc">Tendermint address of the validator (must be bech32m encoded and start with 'tnam')</span>
+                </div>
+            </div>
             <div class="response">
-                <h4>Response:</h4>
+                <h4>Success Response:</h4>
                 <pre><code>{
     "address": "tnam1q..."
+}</code></pre>
+                <h4>Error Responses:</h4>
+                <pre><code>{
+    "error": "Invalid Tendermint address",
+    "details": "Tendermint address must be bech32m encoded and start with 'tnam'"
+}</code></pre>
+                <pre><code>{
+    "error": "Not found",
+    "details": "No validator found with Tendermint address tnam1q..."
 }</code></pre>
             </div>
         </div>
@@ -641,8 +773,13 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
             <h3>Get Validator Details</h3>
             <p><span class="method">GET</span> <span class="path">/api/pos/validators/{address}</span></p>
             <p>Get detailed information about a specific validator.</p>
+            <div class="params">
+                <div class="param">
+                    <span class="param-name">address</span>: <span class="param-desc">Namada address of the validator</span>
+                </div>
+            </div>
             <div class="response">
-                <h4>Response:</h4>
+                <h4>Success Response:</h4>
                 <pre><code>{
     "address": "tnam1q...",
     "state": "active",
@@ -656,15 +793,47 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
         "discord_handle": "validator#1234"
     }
 }</code></pre>
+                <h4>Error Responses:</h4>
+                <pre><code>{
+    "error": "Invalid address format",
+    "details": "Invalid address format: expected bech32m encoding"
+}</code></pre>
+                <pre><code>{
+    "error": "Not found",
+    "details": "Address tnam1q... is not a validator"
+}</code></pre>
             </div>
         </div>
 
         <div class="endpoint">
             <h3>Get All Validators</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validators?page={page}&per_page={per_page}</span></p>
-            <p>Get information about all validators.</p>
+            <p><span class="method">GET</span> <span class="path">/api/pos/validators</span></p>
+            <p>Get a simple list of all validators. This endpoint returns just the addresses without additional details.</p>
             <div class="response">
                 <h4>Response:</h4>
+                <pre><code>{
+    "validators": [
+        "tnam1q...",
+        "tnam1q..."
+    ]
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <h3>Get All Validators with Details</h3>
+            <p><span class="method">GET</span> <span class="path">/api/pos/validators_details?page={page}&per_page={per_page}</span></p>
+            <p>Get detailed information about all validators with pagination.</p>
+            <div class="params">
+                <div class="param">
+                    <span class="param-name">page</span>: <span class="param-desc">Page number (default: 1, must be greater than 0)</span>
+                </div>
+                <div class="param">
+                    <span class="param-name">per_page</span>: <span class="param-desc">Number of validators per page (default: 10, max: 50)</span>
+                </div>
+            </div>
+            <div class="response">
+                <h4>Success Response:</h4>
                 <pre><code>{
     "validators": [
         {
@@ -687,6 +856,19 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
         "per_page": 10,
         "total_pages": 10
     }
+}</code></pre>
+                <h4>Error Responses:</h4>
+                <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Page number must be greater than 0"
+}</code></pre>
+                <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Items per page cannot exceed 50"
+}</code></pre>
+                <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Page number 11 exceeds total pages 10"
 }</code></pre>
             </div>
         </div>
