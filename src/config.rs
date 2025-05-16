@@ -1,6 +1,7 @@
 use clap::Parser;
 use serde::Deserialize;
 use std::path::PathBuf;
+use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -28,26 +29,41 @@ pub struct Config {
 impl Config {
     pub fn load(args: CliArgs) -> Result<Self, ConfigError> {
         // First load from .env file
-        let _ = dotenvy::dotenv();
+        match dotenvy::dotenv() {
+            Ok(_) => info!("Loaded .env file"),
+            Err(e) => warn!("No .env file found: {}", e),
+        }
         
         // Initialize with defaults
         let mut config = Config {
             rpc_url: std::env::var("NAMADA_RPC_URL")
-                .unwrap_or_else(|_| "http://localhost:26657".to_string()),
+                .unwrap_or_else(|_| {
+                    info!("NAMADA_RPC_URL not found in environment, using default");
+                    "http://localhost:26657".to_string()
+                }),
             port: std::env::var("API_PORT")
                 .ok()
                 .and_then(|p| p.parse::<u16>().ok())
-                .unwrap_or(3000),
+                .unwrap_or_else(|| {
+                    info!("API_PORT not found in environment or invalid, using default");
+                    3000
+                }),
             cors_allowed_origins: vec!["*".to_string()],
         };
         
         // Override with CLI args
         if let Some(rpc_url) = args.rpc_url {
+            info!("Using RPC URL from command line arguments");
             config.rpc_url = rpc_url;
+        } else {
+            info!("Using RPC URL from environment: {}", config.rpc_url);
         }
         
         if args.port != 0 {
+            info!("Using port from command line arguments");
             config.port = args.port;
+        } else {
+            info!("Using port from environment: {}", config.port);
         }
         
         // Validate configuration

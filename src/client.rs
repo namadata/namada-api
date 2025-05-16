@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, error, info};
-use reqwest::Client;
+use tracing::{error, info};
 use tendermint_rpc::{HttpClient, Url};
 use namada_core::address::Address;
 use namada_core::chain::Epoch;
 use namada_proof_of_stake::types::{LivenessInfo, ValidatorMetaData, CommissionPair, ValidatorStateInfo};
 use namada_sdk::rpc;
 use std::str::FromStr;
+use tokio::task::spawn_blocking;
 
 #[derive(Error, Debug)]
 pub enum ClientError {
@@ -20,38 +20,23 @@ pub enum ClientError {
 }
 
 pub struct NamadaClient {
-    rpc_client: Client,
+    rpc_client: HttpClient,
     rpc_url: String,
 }
 
 impl NamadaClient {
-    pub fn new(rpc_url: String) -> Self {
+    pub async fn new(rpc_url: String) -> Result<Self, ClientError> {
         info!("Initializing Namada client with RPC URL: {}", rpc_url);
-        Self {
-            rpc_client: Client::new(),
-            rpc_url,
-        }
+        let url = Url::from_str(&rpc_url)
+            .map_err(|e| ClientError::InvalidUrl(e.to_string()))?;
+        let rpc_client = HttpClient::new(url)
+            .map_err(|e| ClientError::ConnectionError(e.to_string()))?;
+        Ok(Self { rpc_client, rpc_url })
     }
 
     pub async fn check_connection(&self) -> Result<(), ClientError> {
-        debug!("Checking connection to Namada RPC at {}", self.rpc_url);
-        match self.rpc_client.get(&self.rpc_url).send().await {
-            Ok(response) if response.status().is_success() => {
-                info!("Successfully connected to Namada RPC");
-                Ok(())
-            },
-            Ok(response) => {
-                let status = response.status();
-                let error_msg = format!("RPC endpoint returned non-success status: {}", status);
-                error!("{}", error_msg);
-                Err(ClientError::ConnectionError(error_msg))
-            },
-            Err(e) => {
-                let error_msg = format!("Failed to connect to RPC endpoint: {}", e);
-                error!("{}", error_msg);
-                Err(ClientError::ConnectionError(error_msg))
-            }
-        }
+        // Try a simple health check (e.g., get epoch)
+        self.query_epoch().await.map(|_| ())
     }
 
     pub fn rpc_url(&self) -> &str {
@@ -59,13 +44,27 @@ impl NamadaClient {
     }
 
     pub async fn query_epoch(&self) -> Result<Epoch, ClientError> {
-        rpc::query_epoch(&self.rpc_client).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::query_epoch(&client).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn get_liveness_info(&self) -> Result<LivenessInfo, ClientError> {
-        rpc::get_validators_liveness_info(&self.rpc_client).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_validators_liveness_info(&client).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn get_all_validators(&self, epoch: Option<Epoch>) -> Result<Vec<Address>, ClientError> {
@@ -73,29 +72,68 @@ impl NamadaClient {
             Some(e) => e,
             None => self.query_epoch().await?,
         };
-        let set = rpc::get_all_validators(&self.rpc_client, epoch).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))?;
-        Ok(set.into_iter().collect())
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_all_validators(&client, epoch).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+        .map(|set| set.into_iter().collect())
     }
 
     pub async fn is_validator(&self, address: &Address) -> Result<bool, ClientError> {
-        rpc::is_validator(&self.rpc_client, address).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        let address = address.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::is_validator(&client, &address).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn get_validator_state(&self, address: &Address, epoch: Option<Epoch>) -> Result<ValidatorStateInfo, ClientError> {
-        rpc::get_validator_state(&self.rpc_client, address, epoch).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        let address = address.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_validator_state(&client, &address, epoch).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn get_validator_stake(&self, epoch: Epoch, address: &Address) -> Result<namada_core::token::Amount, ClientError> {
-        rpc::get_validator_stake(&self.rpc_client, epoch, address).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        let address = address.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_validator_stake(&client, epoch, &address).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn query_metadata(&self, address: &Address, epoch: Option<Epoch>) -> Result<(Option<ValidatorMetaData>, CommissionPair), ClientError> {
-        rpc::query_metadata(&self.rpc_client, address, epoch).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))
+        let client = self.rpc_client.clone();
+        let address = address.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::query_metadata(&client, &address, epoch).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
     }
 
     pub async fn get_delegation_validators(&self, address: &Address, epoch: Option<Epoch>) -> Result<Vec<Address>, ClientError> {
@@ -103,8 +141,16 @@ impl NamadaClient {
             Some(e) => e,
             None => self.query_epoch().await?,
         };
-        let set = rpc::get_delegation_validators(&self.rpc_client, address, epoch).await
-            .map_err(|e| ClientError::QueryError(e.to_string()))?;
-        Ok(set.into_iter().collect())
+        let client = self.rpc_client.clone();
+        let address = address.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_delegation_validators(&client, &address, epoch).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+        .map(|set| set.into_iter().collect())
     }
 } 
