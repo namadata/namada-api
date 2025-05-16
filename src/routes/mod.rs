@@ -1,3 +1,2 @@
-pub mod health;
-pub mod info;
-pub mod pos; 
+pub mod pos;
+pub mod health; 

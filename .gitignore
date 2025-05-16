@@ -1,1 +1,37 @@
-/target
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Debug files
+*.log
+
+# Generated documentation
+/doc/
+
+# Test coverage reports
+/coverage/
+
+# Temporary files
+/tmp/
+
+# Namada specific files
+# Add any Namada-specific files that shouldn't be committed
+
+# Backup files
+*.bak
+*~
+
+references/

@@ -1,14 +1,17 @@
-use axum::{
-    extract::State,
-    Json,
-};
+use axum::{extract::State, Json, routing::get, Router, response::IntoResponse};
 use std::sync::Arc;
 use serde_json::json;
 use tracing::warn;
 
-use crate::AppState;
+use crate::state::AppState;
 
-pub async fn check_health() -> Json<serde_json::Value> {
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/api/health", get(check_health))
+        .route("/api/health/rpc", get(check_rpc_health))
+}
+
+pub async fn check_health() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
@@ -17,7 +20,7 @@ pub async fn check_health() -> Json<serde_json::Value> {
 
 pub async fn check_rpc_health(
     State(state): State<Arc<AppState>>,
-) -> Json<serde_json::Value> {
+) -> impl IntoResponse {
     match state.namada_client.check_connection().await {
         Ok(_) => Json(json!({
             "status": "ok",

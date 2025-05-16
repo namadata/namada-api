@@ -1,24 +1,22 @@
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    Json,
-};
-use serde_json::json;
+use axum::{response::{IntoResponse, Response}, http::StatusCode, Json};
+use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("Bad request: {0}")]
     BadRequest(String),
-    
     #[error("Not found: {0}")]
     NotFound(String),
-    
     #[error("Internal server error: {0}")]
     InternalError(String),
-    
     #[error("Query error: {0}")]
     QueryError(String),
+}
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
 }
 
 impl IntoResponse for ApiError {
@@ -29,11 +27,7 @@ impl IntoResponse for ApiError {
             ApiError::InternalError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
             ApiError::QueryError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", msg)),
         };
-
-        let body = Json(json!({
-            "error": error_message
-        }));
-
+        let body = Json(ErrorResponse { error: error_message });
         (status, body).into_response()
     }
 } 

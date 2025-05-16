@@ -1,132 +1,100 @@
-# Namada API
+# Namada PoS REST API
 
-A REST API for interacting with the Namada blockchain, with a focus on the Proof-of-Stake (PoS) module.
+This project provides a REST API for querying Namada Proof-of-Stake (PoS) validator, liveness, and delegation information, using the Namada SDK and modules at version 0.149.1.
 
 ## Features
+- Query validator liveness info
+- Lookup validator by Tendermint address
+- Get validator details
+- List all validators
+- Get delegations for an address
+- Health checks for API and Namada RPC
 
-- Connect to any Namada RPC endpoint (local or remote)
-- Query validator information
-- Get liveness information
-- Look up validators by Tendermint address
-- Query current epoch and native token
+## Configuration
 
-## Getting Started
+You can configure the API via environment variables, CLI arguments, or a config file (see `src/config.rs`).
 
-### Prerequisites
+- `NAMADA_RPC_URL` (env/CLI): The Namada RPC endpoint (default: `http://localhost:26657`)
+- `API_PORT` (env/CLI): The port to run the API server on (default: `3000`)
 
-- Rust and Cargo
-- Access to a Namada RPC endpoint
-
-### Installation
-
-1. Clone the repository
-2. Build the project:
-
-```bash
-cargo build --release
+Example:
+```sh
+NAMADA_RPC_URL=http://localhost:26657 cargo run --release -- --port 3000
 ```
 
-### Configuration
+## Running the API
 
-The API can be configured using:
+You can run the API in several ways:
 
-1. Environment variables
-2. Command-line arguments
-3. Configuration file
-
-#### Environment Variables
-
-- `NAMADA_RPC_URL`: URL of the Namada RPC endpoint
-- `API_PORT`: Port for the API server (default: 3000)
-
-#### Command-Line Arguments
-
-```bash
-namada-api --rpc-url http://localhost:26657 --port 3000
+### 1. Using a `.env` file (recommended for local dev)
+Create a `.env` file in your project root:
+```
+NAMADA_RPC_URL=http://localhost:26657
+API_PORT=3000
+```
+Then start the server:
+```sh
+cargo run --release
 ```
 
-### Running the API
-
-There are several ways to run the Namada API:
-
-#### 1. Using Cargo
-
-The simplest way to run the API during development:
-
-```bash
-cargo run --release -- --rpc-url http://localhost:26657
-```
-
-#### 2. Running the compiled binary
-
-After building the release version:
-
-```bash
-./target/release/namada-api --rpc-url http://localhost:26657
-```
-
-#### 3. Using environment variables
-
-You can set environment variables instead of command-line arguments:
-
-```bash
+### 2. Using environment variables
+```sh
 export NAMADA_RPC_URL=http://localhost:26657
 export API_PORT=3000
 cargo run --release
 ```
 
-#### 4. Using a .env file
-
-Create a `.env` file in the project root:
-
-```
-NAMADA_RPC_URL=http://localhost:26657
-API_PORT=3000
+### 3. Using CLI arguments
+```sh
+cargo run --release -- --rpc-url http://localhost:26657 --port 3000
 ```
 
-Then run:
+**Configuration precedence:**
+1. CLI arguments (highest)
+2. Environment variables (including from `.env`)
+3. Defaults in code
 
-```bash
-cargo run --release
+## Endpoints
+
+All endpoints are under `/api`.
+
+### Health
+- `GET /api/health` — API health
+- `GET /api/health/rpc` — Namada RPC health
+
+### PoS
+- `GET /api/pos/liveness_info` — Validator liveness info
+- `GET /api/pos/validators/tm/{tm_addr}` — Lookup validator by Tendermint address
+- `GET /api/pos/validators/{address}` — Validator details
+- `GET /api/pos/validators` — List all validators
+- `GET /api/pos/delegations/{address}` — Delegations for an address
+
+## Example Python Client
+
+```python
+import requests
+
+class NamadaClient:
+    def __init__(self, base_url="http://localhost:3000/api"):
+        self.base_url = base_url
+    def get_liveness_info(self):
+        return requests.get(f"{self.base_url}/pos/liveness_info").json()
+    def get_validator_by_tm_addr(self, tm_addr):
+        return requests.get(f"{self.base_url}/pos/validators/tm/{tm_addr}").json()
+    def get_validator_details(self, address):
+        return requests.get(f"{self.base_url}/pos/validators/{address}").json()
+    def get_validators(self):
+        return requests.get(f"{self.base_url}/pos/validators").json()
+    def get_delegations(self, address):
+        return requests.get(f"{self.base_url}/pos/delegations/{address}").json()
+
+# Usage
+client = NamadaClient()
+print(client.get_liveness_info())
 ```
 
-## API Endpoints
-
-### Health Checks
-
-- `GET /api/health`: Check API health
-- `GET /api/health/rpc`: Check RPC connection health
-
-### Basic Information
-
-- `GET /api/epoch`: Get current epoch
-- `GET /api/native_token`: Get native token address
-
-### PoS Endpoints
-
-- `GET /api/pos/validators`: Get all validators
-- `GET /api/pos/validators/{address}`: Get validator details
-- `GET /api/pos/liveness_info`: Get validators liveness info
-- `GET /api/pos/validators/tm/{tm_addr}`: Find validator by Tendermint address
-
-## Example Usage
-
-Once the API is running, you can test it using curl:
-
-```bash
-# Check API health
-curl http://localhost:3000/api/health
-
-# Check RPC connection
-curl http://localhost:3000/api/health/rpc
-
-# Get current epoch
-curl http://localhost:3000/api/epoch
-
-# Get validators liveness info
-curl http://localhost:3000/api/pos/liveness_info
-```
+## Namada SDK Version
+- SDK and all modules: **0.149.1**
 
 ## License
-
-[MIT](LICENSE) 
+GPL-3.0 

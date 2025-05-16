@@ -3,7 +3,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct LivenessInfoResponse {
     pub liveness_window_len: u64,
-    pub liveness_threshold: String, // Using String for Dec
+    pub liveness_threshold: String,
     pub validators: Vec<ValidatorLiveness>,
 }
 
@@ -31,13 +31,19 @@ pub struct ValidatorDetailsResponse {
 
 #[derive(Serialize)]
 pub struct ValidatorMetadata {
-    pub email: Option<String>,
+    pub email: String,
     pub description: Option<String>,
     pub website: Option<String>,
     pub discord_handle: Option<String>,
 }
 
 #[derive(Serialize)]
-pub struct ValidatorsResponse {
-    pub validators: Vec<String>,
+pub struct DelegationsResponse {
+    pub delegations: Vec<Delegation>,
+}
+
+#[derive(Serialize)]
+pub struct Delegation {
+    pub validator: String,
+    pub amount: String,
 } 
