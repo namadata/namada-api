@@ -25,11 +25,12 @@ The project is structured to make it easy to add new endpoints and functionality
 
 ```
 src/
-├── api/          # API route handlers
-├── config/       # Configuration management
 ├── models/       # Data models and types
-├── services/     # Business logic
-└── utils/        # Shared utilities
+├── tests/        # Tests
+├── client.rs     # SDK Client
+├── config.rs     # Configuration management
+├── main.rs       # Main and routes
+├── state.rs      # App state / Namada Client handling 
 ```
 
 ## Configuration
