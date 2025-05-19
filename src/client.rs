@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use thiserror::Error;
 use tracing::{error, info};
 use tendermint_rpc::{HttpClient, Url};

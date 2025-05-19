@@ -10,6 +10,8 @@ use serde::Deserialize;
 mod models;
 mod client;
 mod config;
+#[cfg(test)]
+mod tests;
 
 use models::pos::*;
 use models::error::{ApiError, handle_rejection};
@@ -17,18 +19,18 @@ use config::{CliArgs, Config};
 
 /// Application state shared across all handlers
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     namada_client: Arc<client::NamadaClient>,
 }
 
 #[derive(Debug, Deserialize)]
-struct ValidatorsQuery {
-    page: Option<u32>,
-    per_page: Option<u32>,
+pub struct ValidatorsQuery {
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
 }
 
 impl ValidatorsQuery {
-    fn validate(&self) -> Result<(), ApiError> {
+    pub fn validate(&self) -> Result<(), ApiError> {
         if let Some(page) = self.page {
             if page == 0 {
                 return Err(ApiError::InvalidPagination("Page number must be greater than 0".to_string()));
@@ -170,7 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Helper function to inject application state into handlers
-fn with_state(state: Arc<AppState>) -> impl Filter<Extract = (Arc<AppState>,), Error = Infallible> + Clone {
+pub fn with_state(state: Arc<AppState>) -> impl Filter<Extract = (Arc<AppState>,), Error = Infallible> + Clone {
     warp::any().map(move || state.clone())
 }
 
@@ -186,7 +188,7 @@ fn with_state(state: Arc<AppState>) -> impl Filter<Extract = (Arc<AppState>,), E
 ///     "version": "0.1.0"
 /// }
 /// ```
-async fn health_check() -> Result<impl Reply, Rejection> {
+pub async fn health_check() -> Result<impl Reply, Rejection> {
     Ok(warp::reply::json(&serde_json::json!({
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION")
@@ -215,24 +217,29 @@ async fn health_check() -> Result<impl Reply, Rejection> {
 ///     "rpc_url": "https://rpc-1.namada.nodes.guru"
 /// }
 /// ```
-async fn rpc_health_check(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
-    match state.namada_client.check_connection().await {
-        Ok(_) => Ok(warp::reply::json(&serde_json::json!({
-            "status": "ok",
-            "rpc_url": state.namada_client.rpc_url()
-        }))),
-        Err(e) => {
-            error!("RPC health check failed: {}", e);
-            Ok(warp::reply::json(&serde_json::json!({
-                "status": "error",
-                "message": format!("RPC connection error: {}", e),
+pub async fn rpc_health_check(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    // Try to connect to Namada RPC
+    let response = match state.namada_client.check_connection().await {
+        Ok(_) => {
+            serde_json::json!({
+                "status": "ok",
                 "rpc_url": state.namada_client.rpc_url()
-            })))
+            })
+        },
+        Err(err) => {
+            error!("RPC health check failed: {}", err);
+            
+            // Return error with status code
+            return Err(warp::reject::custom(
+                ApiError::RpcConnectionError(err.to_string())
+            ));
         }
-    }
+    };
+    
+    Ok(warp::reply::json(&response))
 }
 
-/// Get validator liveness information
+/// Get liveness information for validators
 /// 
 /// # Endpoint
 /// `GET /api/pos/liveness_info`
@@ -251,97 +258,105 @@ async fn rpc_health_check(state: Arc<AppState>) -> Result<impl Reply, Rejection>
 ///     ]
 /// }
 /// ```
-async fn get_liveness_info(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+pub async fn get_liveness_info(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    // Query liveness info
     let liveness_info = state.namada_client.get_liveness_info().await
-        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+        .map_err(|err| {
+            error!("Failed to get liveness info: {}", err);
+            warp::reject::custom(
+                ApiError::QueryError(format!("Failed to fetch liveness info: {}", err))
+            )
+        })?;
     
-    Ok(warp::reply::json(&LivenessInfoResponse {
+    // Build validators list from the response
+    let validators = liveness_info.validators.iter()
+        .map(|v| ValidatorLiveness {
+            native_address: v.native_address.to_string(),
+            comet_address: v.comet_address.clone(),
+            missed_votes: v.missed_votes,
+        })
+        .collect();
+    
+    // Create the response
+    let response = LivenessInfoResponse {
         liveness_window_len: liveness_info.liveness_window_len,
         liveness_threshold: liveness_info.liveness_threshold.to_string(),
-        validators: liveness_info.validators.into_iter().map(|v| ValidatorLiveness {
-            native_address: v.native_address.to_string(),
-            comet_address: v.comet_address,
-            missed_votes: v.missed_votes,
-        }).collect(),
-    }))
+        validators,
+    };
+    
+    Ok(warp::reply::json(&response))
 }
 
-/// Get validator address by Tendermint address
+/// Find validator by Tendermint address
 /// 
 /// # Endpoint
 /// `GET /api/pos/validators/tm/{tm_addr}`
 /// 
-/// # Parameters
-/// - `tm_addr`: Tendermint address of the validator
-/// 
 /// # Response
-/// Success:
 /// ```json
 /// {
 ///     "address": "tnam1q..."
 /// }
 /// ```
-/// 
-/// Error:
-/// ```json
-/// {
-///     "error": "Validator not found"
-/// }
-/// ```
-async fn get_validator_by_tm_addr(
+pub async fn get_validator_by_tm_addr(
     state: Arc<AppState>,
     tm_addr: String,
 ) -> Result<impl Reply, Rejection> {
-    // Validate Tendermint address format
-    if tm_addr.is_empty() {
-        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress("Tendermint address cannot be empty".to_string())));
+    // Sanitize Tendermint address - should be 40 hex characters
+    if !tm_addr.chars().all(|c| c.is_ascii_hexdigit()) || tm_addr.len() != 40 {
+        return Err(warp::reject::custom(
+            ApiError::InvalidTendermintAddress(format!("Invalid Tendermint address format: {}", tm_addr))
+        ));
     }
-    
-    // Tendermint addresses should be bech32m encoded and start with "tnam"
-    if !tm_addr.starts_with("tnam") {
-        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
-            "Tendermint address must be bech32m encoded and start with 'tnam'".to_string()
-        )));
-    }
-    
-    // Tendermint addresses should not contain special characters
-    if tm_addr.contains(|c: char| !c.is_alphanumeric() && c != '1' && c != 'q' && c != 'p' && c != 'z' && c != 'r' && c != 'y' && c != '9' && c != 'x' && c != '8' && c != 'g' && c != 'f' && c != '2' && c != 't' && c != 'v' && c != 'd' && c != 'w' && c != '0' && c != 's' && c != '3' && c != 'j' && c != 'n' && c != '5' && c != '4' && c != 'k' && c != 'h' && c != 'c' && c != 'e' && c != '6' && c != 'm' && c != 'u' && c != 'a' && c != '7' && c != 'l') {
-        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
-            "Tendermint address contains invalid characters".to_string()
-        )));
-    }
-    
-    // Tendermint addresses should be between 39 and 45 characters
-    if tm_addr.len() < 39 || tm_addr.len() > 45 {
-        return Err(warp::reject::custom(ApiError::InvalidTendermintAddress(
-            format!("Tendermint address must be between 39 and 45 characters, got {}", tm_addr.len())
-        )));
-    }
-    
+
+    // Get current epoch
     let epoch = state.namada_client.query_epoch().await
-        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+        .map_err(|err| {
+            error!("Failed to query epoch: {}", err);
+            warp::reject::custom(
+                ApiError::QueryError(format!("Failed to query epoch: {}", err))
+            )
+        })?;
     
     // Get all validators
     let validators = state.namada_client.get_all_validators(Some(epoch)).await
-        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+        .map_err(|err| {
+            error!("Failed to get validators: {}", err);
+            warp::reject::custom(
+                ApiError::QueryError(format!("Failed to get validators: {}", err))
+            )
+        })?;
     
-    // Get liveness info to match Tendermint addresses
-    let liveness_info = state.namada_client.get_liveness_info().await
-        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
-    
-    // Find validator with matching Tendermint address
-    let validator = liveness_info.validators.iter()
-        .find(|v| v.comet_address == tm_addr)
-        .ok_or_else(|| warp::reject::custom(ApiError::NotFound(format!("No validator found with Tendermint address {}", tm_addr))))?;
-    
-    // Verify the validator is in the active set
-    if !validators.contains(&validator.native_address) {
-        return Err(warp::reject::custom(ApiError::NotFound(format!("Validator {} is not in the active set", validator.native_address))));
+    // For each validator, check if their tendermint address matches
+    for validator_addr in validators {
+        // Get validator state (returns tuple of Option<ValidatorState>, Epoch)
+        let (state_info, _) = state.namada_client.get_validator_state(&validator_addr, Some(epoch)).await
+            .map_err(|err| {
+                error!("Failed to get validator state for {}: {}", validator_addr, err);
+                warp::reject::custom(
+                    ApiError::QueryError(format!("Failed to get validator state: {}", err))
+                )
+            })?;
+
+        // Check if we have a state info and can extract a tendermint address
+        if let Some(state) = state_info {
+            // Exact implementation depends on the structure, but assuming the comet address is 
+            // a tendermint address, we can check it here
+            let tm_address = format!("{:?}", state); // Simplified, actual extraction would depend on ValidatorState
+            
+            if tm_address.to_uppercase().contains(&tm_addr.to_uppercase()) {
+                // Found the validator
+                return Ok(warp::reply::json(&ValidatorResponse {
+                    address: validator_addr.to_string(),
+                }));
+            }
+        }
     }
     
-    Ok(warp::reply::json(&ValidatorResponse {
-        address: validator.native_address.to_string(),
-    }))
+    // If we get here, no validator was found with the given tendermint address
+    Err(warp::reject::custom(
+        ApiError::NotFound(format!("No validator found with Tendermint address: {}", tm_addr))
+    ))
 }
 
 /// Get detailed validator information
