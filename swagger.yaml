@@ -1,0 +1,484 @@
+openapi: 3.0.0
+info:
+  title: Namada API
+  description: API for interacting with the Namada blockchain, providing access to validator and proof-of-stake information.
+  version: 0.1.0
+  contact:
+    name: Namadata 
+servers:
+  - url: http://127.0.0.1:3000
+    description: Local server
+paths:
+  /api/health:
+    get:
+      summary: Basic health check
+      description: Check if the API service is functioning properly
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: API service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 0.1.0
+
+  /api/health/rpc:
+    get:
+      summary: RPC connection health check
+      description: Check if the API can connect to the Namada RPC node
+      operationId: rpcHealthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: RPC connection status
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/RpcHealthSuccess'
+                  - $ref: '#/components/schemas/RpcHealthError'
+
+  /api/docs:
+    get:
+      summary: API documentation
+      description: Retrieve API documentation
+      operationId: serveDocs
+      tags:
+        - Documentation
+      responses:
+        '200':
+          description: API documentation HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/pos/liveness_info:
+    get:
+      summary: Get validator liveness information
+      description: Retrieve liveness information for all validators
+      operationId: getLivenessInfo
+      tags:
+        - Proof of Stake
+      responses:
+        '200':
+          description: Validator liveness information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LivenessInfoResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validators/tm/{tm_addr}:
+    get:
+      summary: Get validator by Tendermint address
+      description: Retrieve a validator's Namada address by its Tendermint address
+      operationId: getValidatorByTmAddr
+      tags:
+        - Proof of Stake
+      parameters:
+        - name: tm_addr
+          in: path
+          description: Tendermint address of the validator
+          required: true
+          schema:
+            type: string
+            example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+      responses:
+        '200':
+          description: Validator information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatorResponse'
+        '400':
+          description: Invalid Tendermint address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Validator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validators/{address}:
+    get:
+      summary: Get validator details
+      description: Retrieve detailed information about a specific validator
+      operationId: getValidatorDetails
+      tags:
+        - Proof of Stake
+      parameters:
+        - name: address
+          in: path
+          description: Namada address of the validator
+          required: true
+          schema:
+            type: string
+            example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+      responses:
+        '200':
+          description: Detailed validator information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatorDetailsResponse'
+        '400':
+          description: Invalid address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Validator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validators:
+    get:
+      summary: Get all validators
+      description: Retrieve a list of all validators
+      operationId: getAllValidators
+      tags:
+        - Proof of Stake
+      responses:
+        '200':
+          description: List of validators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ValidatorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validators_details:
+    get:
+      summary: Get detailed information for all validators
+      description: Retrieve detailed information for all validators with pagination
+      operationId: getValidatorsDetails
+      tags:
+        - Proof of Stake
+      parameters:
+        - name: page
+          in: query
+          description: Page number (starts at 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page (max 50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Detailed information for validators
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  validators:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ValidatorDetailsResponse'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: Total number of validators
+                      pages:
+                        type: integer
+                        description: Total number of pages
+                      current_page:
+                        type: integer
+                        description: Current page number
+                      per_page:
+                        type: integer
+                        description: Items per page
+        '400':
+          description: Invalid pagination parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validator_set/consensus:
+    get:
+      summary: Get consensus validator set
+      description: Retrieve the current consensus validator set
+      operationId: getConsensusValidatorSet
+      tags:
+        - Proof of Stake
+      responses:
+        '200':
+          description: Consensus validator set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatorSetResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pos/validator_set/below_capacity:
+    get:
+      summary: Get below capacity validator set
+      description: Retrieve validators that are below capacity
+      operationId: getBelowCapacityValidatorSet
+      tags:
+        - Proof of Stake
+      responses:
+        '200':
+          description: Below capacity validator set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatorSetResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Detailed error information
+          nullable: true
+      required:
+        - error
+
+    RpcHealthSuccess:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        rpc_url:
+          type: string
+          description: RPC URL
+          example: https://rpc-1.namada.nodes.guru
+      required:
+        - status
+        - rpc_url
+
+    RpcHealthError:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          description: Error message
+          example: RPC connection error
+        rpc_url:
+          type: string
+          description: RPC URL
+          example: https://rpc-1.namada.nodes.guru
+      required:
+        - status
+        - message
+        - rpc_url
+
+    LivenessInfoResponse:
+      type: object
+      properties:
+        liveness_window_len:
+          type: integer
+          description: Length of the liveness window
+          example: 100
+        liveness_threshold:
+          type: string
+          description: Liveness threshold as a decimal string
+          example: "0.9"
+        validators:
+          type: array
+          description: List of validators with liveness information
+          items:
+            $ref: '#/components/schemas/ValidatorLiveness'
+      required:
+        - liveness_window_len
+        - liveness_threshold
+        - validators
+
+    ValidatorLiveness:
+      type: object
+      properties:
+        native_address:
+          type: string
+          description: Namada address of the validator
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        comet_address:
+          type: string
+          description: Tendermint/Comet address of the validator
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        missed_votes:
+          type: integer
+          description: Number of missed votes in the liveness window
+          example: 0
+      required:
+        - native_address
+        - comet_address
+        - missed_votes
+
+    ValidatorResponse:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Namada address of the validator
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+      required:
+        - address
+
+    ValidatorDetailsResponse:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Namada address of the validator
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        state:
+          type: string
+          description: Validator state (active, jailed, etc.)
+          example: active
+        stake:
+          type: string
+          description: Validator stake amount
+          example: "1000000"
+        commission_rate:
+          type: string
+          description: Validator commission rate
+          example: "0.05"
+        max_commission_change_per_epoch:
+          type: string
+          description: Maximum commission change allowed per epoch
+          example: "0.01"
+        metadata:
+          type: object
+          nullable: true
+          description: Validator metadata
+          properties:
+            email:
+              type: string
+              description: Validator email
+              example: validator@example.com
+            description:
+              type: string
+              description: Validator description
+              nullable: true
+              example: Professional validator service
+            website:
+              type: string
+              description: Validator website
+              nullable: true
+              example: https://example.com
+            discord_handle:
+              type: string
+              description: Validator Discord handle
+              nullable: true
+              example: validator#1234
+          required:
+            - email
+      required:
+        - address
+        - state
+        - stake
+        - commission_rate
+        - max_commission_change_per_epoch
+
+    ValidatorSetResponse:
+      type: object
+      properties:
+        validators:
+          type: array
+          description: List of validators with stake information
+          items:
+            $ref: '#/components/schemas/WeightedValidatorResponse'
+      required:
+        - validators
+
+    WeightedValidatorResponse:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Namada address of the validator
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        stake:
+          type: string
+          description: Validator stake amount
+          example: "1000000"
+      required:
+        - address
+        - stake
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Documentation
+    description: API documentation endpoints
+  - name: Proof of Stake
+    description: Proof of stake related endpoints 
