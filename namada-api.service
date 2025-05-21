@@ -1,0 +1,25 @@
+[Unit]
+Description=Namada API Service
+Documentation=https://github.com/namada-api
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/namada-api
+ExecStart=/root/namada-api/target/release/namada-api
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="NAMADA_RPC_URL=https://rpc-1.namada.nodes.guru"
+Environment="API_PORT=3000"
+
+# Security settings
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target 
