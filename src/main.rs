@@ -742,7 +742,7 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
             <p>Get validator information by their Tendermint address.</p>
             <div class="params">
                 <div class="param">
-                    <span class="param-name">tm_addr</span>: <span class="param-desc">Tendermint address of the validator (must be bech32m encoded and start with 'tnam')</span>
+                    <span class="param-name">tm_addr</span>: <span class="param-desc">Tendermint address of the validator (40 hex characters)</span>
                 </div>
             </div>
             <div class="response">
@@ -753,11 +753,11 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
                 <h4>Error Responses:</h4>
                 <pre><code>{
     "error": "Invalid Tendermint address",
-    "details": "Tendermint address must be bech32m encoded and start with 'tnam'"
+    "details": "Tendermint address must be 40 hex characters"
 }</code></pre>
                 <pre><code>{
     "error": "Not found",
-    "details": "No validator found with Tendermint address tnam1q..."
+    "details": "No validator found with Tendermint address CAFA..."
 }</code></pre>
             </div>
         </div>
