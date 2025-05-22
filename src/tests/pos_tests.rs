@@ -5,7 +5,7 @@
  * - /api/pos/validators - List all validators
  * - /api/pos/validators/{address} - Get details for a specific validator
  * - /api/pos/validators_details - Get details for all validators with pagination
- * - /api/pos/validators/tm/{tm_addr} - Find validator by Tendermint address
+ * - /api/pos/validator_by_tm_addr/{tm_addr} - Find validator by Tendermint address
  * - /api/pos/liveness_info - Get validator liveness information
  * - /api/pos/validator_set/consensus - Get consensus validator set
  * - /api/pos/validator_set/below_capacity - Get below-capacity validator set
@@ -192,8 +192,7 @@ mod tests {
         // Create the filter for testing
         let validator_by_tm_route = warp::path("api")
             .and(warp::path("pos"))
-            .and(warp::path("validators"))
-            .and(warp::path("tm"))
+            .and(warp::path("validator_by_tm_addr"))
             .and(warp::path::param::<String>())
             .and(warp::get())
             .and(with_state(state.clone()))
@@ -204,7 +203,7 @@ mod tests {
         // Test with a valid Tendermint address format
         let response = request()
             .method("GET")
-            .path("/api/pos/validators/tm/1234567890ABCDEF1234567890ABCDEF12345678")
+            .path("/api/pos/validator_by_tm_addr/1234567890ABCDEF1234567890ABCDEF12345678")
             .reply(&validator_by_tm_route)
             .await;
         
@@ -214,7 +213,7 @@ mod tests {
         // Test with an invalid Tendermint address format
         let response = request()
             .method("GET")
-            .path("/api/pos/validators/tm/invalid-tendermint-address")
+            .path("/api/pos/validator_by_tm_addr/invalid-tendermint-address")
             .reply(&validator_by_tm_route)
             .await;
         

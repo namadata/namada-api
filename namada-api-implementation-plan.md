@@ -1,5 +1,4 @@
-
-```# Namada API Implementation Plan
+# Namada API Implementation Plan
 
 ## Overview
 
@@ -37,7 +36,8 @@ A key feature of this API is the ability to connect to any Namada RPC endpoint (
    - Create server startup with graceful shutdown
 
 5. **Create basic endpoints**
-   - Implement `/api/health` endpoint (including RPC health)
+   - Implement `/api/health/api_status` endpoint (API health)
+   - Implement `/api/health/rpc_status` endpoint (RPC health)
    - Implement `/api/epoch` endpoint for current epoch
 
 
@@ -51,7 +51,7 @@ Focus on the PoS module with priority on the endpoints needed for liveness infor
    GET /api/pos/validators                # Get all validators
    GET /api/pos/validators/{address}      # Get validator details
    GET /api/pos/liveness_info             # Get validators liveness info
-   GET /api/pos/validators/tm/{tm_addr}   # Find validator by Tendermint address
+   GET /api/pos/validator_by_tm_addr/{tm_addr}   # Find validator by Tendermint address
    ```
 
 2. **Implementation Details for Key Endpoints**
@@ -61,7 +61,7 @@ Focus on the PoS module with priority on the endpoints needed for liveness infor
    - Returns validators consensus participation metrics
    - Include window length and threshold in response
 
-   b. **Validator by Tendermint Address** (`GET /api/pos/validators/tm/{tm_addr}`)
+   b. **Validator by Tendermint Address** (`GET /api/pos/validator_by_tm_addr/{tm_addr}`)
    - Maps to SDK's `validator_by_tm_addr` function
    - Find Namada validator address from Tendermint address
    - Properly handle input validation (important from SDK code review)
@@ -148,42 +148,14 @@ class NamadaClient:
     def __init__(self, base_url="http://localhost:3000/api"):
         self.base_url = base_url
         
-    def get_liveness_info(self):
-        """Get validator liveness information"""
-        response = requests.get(f"{self.base_url}/pos/liveness_info")
-        return response.json()
-        
-    def get_validator_by_tm_addr(self, tm_addr):
-        """Find validator by Tendermint address"""
-        response = requests.get(f"{self.base_url}/pos/validators/tm/{tm_addr}")
-        return response.json()
-        
-    def get_validator_details(self, address):
-        """Get validator details"""
-        response = requests.get(f"{self.base_url}/pos/validators/{address}")
-        return response.json()
-```
-
-
-## Python Client Example
-
-Once the API is implemented, Python clients can interact with it easily:
-
-```python
-import requests
-
-class NamadaClient:
-    def __init__(self, base_url="http://localhost:3000/api"):
-        self.base_url = base_url
-        
     def check_health(self):
         """Check if the API is running"""
-        response = requests.get(f"{self.base_url}/health")
+        response = requests.get(f"{self.base_url}/health/api_status")
         return response.json()
         
     def check_rpc_health(self):
         """Check if the Namada RPC is connected"""
-        response = requests.get(f"{self.base_url}/health/rpc")
+        response = requests.get(f"{self.base_url}/health/rpc_status")
         return response.json()
         
     def get_epoch(self):
@@ -198,7 +170,7 @@ class NamadaClient:
         
     def get_validator_by_tm_addr(self, tm_addr):
         """Find validator by Tendermint address"""
-        response = requests.get(f"{self.base_url}/pos/validators/tm/{tm_addr}")
+        response = requests.get(f"{self.base_url}/pos/validator_by_tm_addr/{tm_addr}")
         return response.json()
         
     def get_validator_details(self, address):

@@ -54,6 +54,13 @@ API_PORT=3000
 
 ## Running the API
 
+### Install dependencies - linux 
+
+```sh
+sudo apt update
+sudo apt install protobuf-compiler libssl-dev pkg-config build-essential
+```
+
 ### Development
 ```sh
 cargo run
@@ -69,18 +76,50 @@ cargo run --release
 docker run namada-api
 ```
 
+## Systemd Service Deployment
+
+For deployments on Linux systems using systemd, a service file is included:
+
+```sh
+# Copy the service file to systemd directory
+sudo cp namada-api.service /etc/systemd/system/
+
+# Reload systemd to recognize the new service
+sudo systemctl daemon-reload
+
+# Enable the service to start automatically on boot
+sudo systemctl enable namada-api.service
+
+# Start the service
+sudo systemctl start namada-api.service
+
+# Check the status
+sudo systemctl status namada-api.service
+
+# View logs
+sudo journalctl -u namada-api.service
+```
+
+The service file is configured to:
+- Run as root user
+- Install the application in `/root/namada-api`
+- Set the same environment variables as defined in the `.env` file
+- Automatically restart on failure
+
+You can modify the `namada-api.service` file to change these settings if needed.
+
 ## API Endpoints
 
 ### Docs
 - `GET /api/docs` — API documentation
 
 ### Health
-- `GET /api/health` — API health check
-- `GET /api/health/rpc` — Namada RPC health check
+- `GET /api/health/api_status` — API health check
+- `GET /api/health/rpc_status` — Namada RPC health check
 
 ### PoS (Current Implementation)
 - `GET /api/pos/liveness_info` — Validator liveness information
-- `GET /api/pos/validators/tm/{tm_addr}` — Validator lookup by Tendermint address
+- `GET /api/pos/validator_by_tm_addr/{tm_addr}` — Validator lookup by Tendermint address
 - `GET /api/pos/validators/{address}` — Detailed validator information
 - `GET /api/pos/validators` — List all validators
 - `GET /api/pos/delegations/{address}` — Get delegations for an address
@@ -95,11 +134,17 @@ class NamadaClient:
     def __init__(self, base_url="http://localhost:3000/api"):
         self.base_url = base_url
     
+    def check_api_health(self):
+        return requests.get(f"{self.base_url}/health/api_status").json()
+    
+    def check_rpc_health(self):
+        return requests.get(f"{self.base_url}/health/rpc_status").json()
+    
     def get_liveness_info(self):
         return requests.get(f"{self.base_url}/pos/liveness_info").json()
     
     def get_validator_by_tm_addr(self, tm_addr):
-        return requests.get(f"{self.base_url}/pos/validators/tm/{tm_addr}").json()
+        return requests.get(f"{self.base_url}/pos/validator_by_tm_addr/{tm_addr}").json()
     
     def get_validator_details(self, address):
         return requests.get(f"{self.base_url}/pos/validators/{address}").json()

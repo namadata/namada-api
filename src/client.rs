@@ -187,4 +187,16 @@ impl NamadaClient {
         .map_err(|e| ClientError::QueryError(e.to_string()))
         .map(|set| set.into_iter().collect())
     }
+
+    pub async fn validator_by_tm_addr(&self, tm_addr: String) -> Result<Option<Address>, ClientError> {
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                RPC.vp().pos().validator_by_tm_addr(&client, &tm_addr).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+    }
 } 

@@ -76,12 +76,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Health routes
     let health = warp::path("api")
         .and(warp::path("health"))
+        .and(warp::path("api_status"))
         .and(warp::get())
         .and_then(health_check);
         
     let rpc_health = warp::path("api")
         .and(warp::path("health"))
-        .and(warp::path("rpc"))
+        .and(warp::path("rpc_status"))
         .and(warp::get())
         .and(with_state(state.clone()))
         .and_then(rpc_health_check);
@@ -96,8 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
     let validator_by_tm = warp::path("api")
         .and(warp::path("pos"))
-        .and(warp::path("validators"))
-        .and(warp::path("tm"))
+        .and(warp::path("validator_by_tm_addr"))
         .and(warp::path::param::<String>())
         .and(warp::get())
         .and(with_state(state.clone()))
@@ -179,7 +179,7 @@ pub fn with_state(state: Arc<AppState>) -> impl Filter<Extract = (Arc<AppState>,
 /// Basic health check endpoint
 /// 
 /// # Endpoint
-/// `GET /api/health`
+/// `GET /api/health/api_status`
 /// 
 /// # Response
 /// ```json
@@ -198,7 +198,7 @@ pub async fn health_check() -> Result<impl Reply, Rejection> {
 /// RPC connection health check endpoint
 /// 
 /// # Endpoint
-/// `GET /api/health/rpc`
+/// `GET /api/health/rpc_status`
 /// 
 /// # Response
 /// Success:
@@ -290,7 +290,10 @@ pub async fn get_liveness_info(state: Arc<AppState>) -> Result<impl Reply, Rejec
 /// Find validator by Tendermint address
 /// 
 /// # Endpoint
-/// `GET /api/pos/validators/tm/{tm_addr}`
+/// `GET /api/pos/validator_by_tm_addr/{tm_addr}`
+/// 
+/// # Parameters
+/// - `tm_addr`: Tendermint consensus address (40 hex characters, e.g. "CAFAD8DA813BAE48779A4219A74632D5DCA49737")
 /// 
 /// # Response
 /// ```json
@@ -305,58 +308,33 @@ pub async fn get_validator_by_tm_addr(
     // Sanitize Tendermint address - should be 40 hex characters
     if !tm_addr.chars().all(|c| c.is_ascii_hexdigit()) || tm_addr.len() != 40 {
         return Err(warp::reject::custom(
-            ApiError::InvalidTendermintAddress(format!("Invalid Tendermint address format: {}", tm_addr))
+            ApiError::InvalidTendermintAddress(format!("Invalid Tendermint address format: {}. Expected 40 hex characters.", tm_addr))
         ));
     }
 
-    // Get current epoch
-    let epoch = state.namada_client.query_epoch().await
+    // Use the client's validator_by_tm_addr method to find the validator
+    let validator_address = state.namada_client.validator_by_tm_addr(tm_addr.clone()).await
         .map_err(|err| {
-            error!("Failed to query epoch: {}", err);
+            error!("Failed to query validator by Tendermint address: {}", err);
             warp::reject::custom(
-                ApiError::QueryError(format!("Failed to query epoch: {}", err))
+                ApiError::QueryError(format!("Failed to query validator by Tendermint address: {}", err))
             )
         })?;
     
-    // Get all validators
-    let validators = state.namada_client.get_all_validators(Some(epoch)).await
-        .map_err(|err| {
-            error!("Failed to get validators: {}", err);
-            warp::reject::custom(
-                ApiError::QueryError(format!("Failed to get validators: {}", err))
-            )
-        })?;
-    
-    // For each validator, check if their tendermint address matches
-    for validator_addr in validators {
-        // Get validator state (returns tuple of Option<ValidatorState>, Epoch)
-        let (state_info, _) = state.namada_client.get_validator_state(&validator_addr, Some(epoch)).await
-            .map_err(|err| {
-                error!("Failed to get validator state for {}: {}", validator_addr, err);
-                warp::reject::custom(
-                    ApiError::QueryError(format!("Failed to get validator state: {}", err))
-                )
-            })?;
-
-        // Check if we have a state info and can extract a tendermint address
-        if let Some(state) = state_info {
-            // Exact implementation depends on the structure, but assuming the comet address is 
-            // a tendermint address, we can check it here
-            let tm_address = format!("{:?}", state); // Simplified, actual extraction would depend on ValidatorState
-            
-            if tm_address.to_uppercase().contains(&tm_addr.to_uppercase()) {
-                // Found the validator
-                return Ok(warp::reply::json(&ValidatorResponse {
-                    address: validator_addr.to_string(),
-                }));
-            }
+    match validator_address {
+        Some(address) => {
+            // Found the validator
+            Ok(warp::reply::json(&ValidatorResponse {
+                address: address.to_string(),
+            }))
+        },
+        None => {
+            // No validator found with the given tendermint address
+            Err(warp::reject::custom(
+                ApiError::NotFound(format!("No validator found with Tendermint address: {}", tm_addr))
+            ))
         }
     }
-    
-    // If we get here, no validator was found with the given tendermint address
-    Err(warp::reject::custom(
-        ApiError::NotFound(format!("No validator found with Tendermint address: {}", tm_addr))
-    ))
 }
 
 /// Get detailed validator information
@@ -706,7 +684,7 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
         
         <div class="endpoint">
             <h3>Basic Health Check</h3>
-            <p><span class="method">GET</span> <span class="path">/api/health</span></p>
+            <p><span class="method">GET</span> <span class="path">/api/health/api_status</span></p>
             <p>Check if the API is running.</p>
             <div class="response">
                 <h4>Response:</h4>
@@ -719,7 +697,7 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
 
         <div class="endpoint">
             <h3>RPC Health Check</h3>
-            <p><span class="method">GET</span> <span class="path">/api/health/rpc</span></p>
+            <p><span class="method">GET</span> <span class="path">/api/health/rpc_status</span></p>
             <p>Check if the RPC connection is working.</p>
             <div class="response">
                 <h4>Success Response:</h4>
@@ -760,7 +738,7 @@ async fn serve_docs() -> Result<impl Reply, Rejection> {
 
         <div class="endpoint">
             <h3>Get Validator by Tendermint Address</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validators/tm/{tm_addr}</span></p>
+            <p><span class="method">GET</span> <span class="path">/api/pos/validator_by_tm_addr/{tm_addr}</span></p>
             <p>Get validator information by their Tendermint address.</p>
             <div class="params">
                 <div class="param">

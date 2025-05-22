@@ -2,8 +2,8 @@
  * Health Endpoint Tests
  * 
  * This module contains tests for the API health endpoints:
- * - /api/health - Basic service health check
- * - /api/health/rpc - RPC connection health check
+ * - /api/health/api_status - Basic service health check
+ * - /api/health/rpc_status - RPC connection health check
  * 
  * These tests verify that:
  * 1. The routes are correctly configured
@@ -44,13 +44,14 @@ mod tests {
         // Create the filter for testing
         let health_route = warp::path("api")
             .and(warp::path("health"))
+            .and(warp::path("api_status"))
             .and(warp::get())
             .and_then(health_check);
         
         // Test the endpoint
         let response = request()
             .method("GET")
-            .path("/api/health")
+            .path("/api/health/api_status")
             .reply(&health_route)
             .await;
         
@@ -76,7 +77,7 @@ mod tests {
         // Create the filter for testing
         let rpc_health_route = warp::path("api")
             .and(warp::path("health"))
-            .and(warp::path("rpc"))
+            .and(warp::path("rpc_status"))
             .and(warp::get())
             .and(with_state(state.clone()))
             .and_then(rpc_health_check);
@@ -84,7 +85,7 @@ mod tests {
         // Test the endpoint
         let response = request()
             .method("GET")
-            .path("/api/health/rpc")
+            .path("/api/health/rpc_status")
             .reply(&rpc_health_route)
             .await;
         
