@@ -126,7 +126,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/pos/validators/{address}:
+  /api/pos/validator_details/{address}:
     get:
       summary: Get validator details
       description: Retrieve detailed information about a specific validator
@@ -441,6 +441,16 @@ components:
               description: Validator Discord handle
               nullable: true
               example: validator#1234
+            name:
+              type: string
+              description: Validator name
+              nullable: true
+              example: My Validator
+            avatar:
+              type: string
+              description: Validator avatar URL
+              nullable: true
+              example: https://example.com/avatar.png
           required:
             - email
       required:

@@ -188,7 +188,8 @@
         "description": "Professional validator service",
         "website": "https://example.com",
         "discord_handle": "validator#1234",
-        <span class="new-field">"name": "My Validator"</span>
+        <span class="new-field">"name": "My Validator"</span>,
+        <span class="new-field">"avatar": "https://example.com/avatar.png"</span>
     }
 }</code></pre>
             <h4>Error Responses:</h4>
@@ -245,7 +246,8 @@
                 "description": "Professional validator service",
                 "website": "https://example.com",
                 "discord_handle": "validator#1234",
-                <span class="new-field">"name": "My Validator"</span>
+                "name": "My Validator",
+                "avatar": "https://example.com/avatar.png"
             }
         }
     ],
@@ -329,7 +331,10 @@
                 <span class="param-name">discord_handle</span>: <span class="param-desc">Optional Discord username for contact</span>
             </div>
             <div class="param">
-                <span class="param-name new-field">name</span>: <span class="param-desc">Optional human-readable name for the validator</span>
+                <span class="param-name">name</span>: <span class="param-desc">Optional human-readable name for the validator</span>
+            </div>
+            <div class="param">
+                <span class="param-name">avatar</span>: <span class="param-desc">Optional validator avatar URL</span>
             </div>
         </div>
         <p><em>Note: All fields except email are optional and may be null.</em></p>

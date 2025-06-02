@@ -124,6 +124,16 @@ You can modify the `namada-api.service` file to change these settings if needed.
 - `GET /api/pos/validators` — List all validators
 - `GET /api/pos/delegations/{address}` — Get delegations for an address
 
+## Recent Updates
+
+### New Validator Metadata Fields
+- **Added `name` field**: Validators can now include a human-readable name in their metadata responses
+- **Added `avatar` field**: Validators can now include an avatar URL in their metadata responses
+
+**Updated endpoints:**
+- `GET /api/pos/validator_details/{address}` 
+- `GET /api/pos/validators_details`
+
 ## Client Libraries
 
 ### Python

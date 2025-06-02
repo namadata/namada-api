@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
     let validator_details = warp::path("api")
         .and(warp::path("pos"))
-        .and(warp::path("validators"))
+        .and(warp::path("validator_details"))
         .and(warp::path::param::<String>())
         .and(warp::get())
         .and(with_state(state.clone()))
@@ -340,7 +340,7 @@ pub async fn get_validator_by_tm_addr(
 /// Get detailed validator information
 /// 
 /// # Endpoint
-/// `GET /api/pos/validators/{address}`
+/// `GET /api/pos/validator_details/{address}`
 /// 
 /// # Parameters
 /// - `address`: Namada address of the validator
@@ -400,6 +400,8 @@ async fn get_validator_details(
             description: m.description,
             website: m.website,
             discord_handle: m.discord_handle,
+            name: m.name,
+            avatar: m.avatar,
         }),
     }))
 }
@@ -519,6 +521,8 @@ async fn get_validators_details(
                 description: m.description,
                 website: m.website,
                 discord_handle: m.discord_handle,
+                name: m.name,
+                avatar: m.avatar,
             }),
         });
     }
@@ -599,309 +603,24 @@ async fn get_below_capacity_validator_set(state: Arc<AppState>) -> Result<impl R
 /// # Endpoint
 /// `GET /api/docs`
 async fn serve_docs() -> Result<impl Reply, Rejection> {
-    let html = r#"
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Namada API Documentation</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                line-height: 1.6;
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 20px;
-                color: #333;
-            }
-            h1 {
-                color: #2c3e50;
-                border-bottom: 2px solid #eee;
-                padding-bottom: 10px;
-            }
-            h2 {
-                color: #34495e;
-                margin-top: 30px;
-            }
-            .endpoint {
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 4px;
-                padding: 20px;
-                margin: 20px 0;
-            }
-            .method {
-                font-weight: bold;
-                color: #2ecc71;
-            }
-            .path {
-                font-family: monospace;
-                background: #e9ecef;
-                padding: 2px 6px;
-                border-radius: 3px;
-            }
-            .response {
-                background: #f1f8e9;
-                border: 1px solid #dcedc8;
-                border-radius: 4px;
-                padding: 15px;
-                margin: 10px 0;
-            }
-            .error {
-                background: #ffebee;
-                border: 1px solid #ffcdd2;
-                border-radius: 4px;
-                padding: 15px;
-                margin: 10px 0;
-            }
-            pre {
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 4px;
-                overflow-x: auto;
-            }
-            code {
-                font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-            }
-            .params {
-                margin: 10px 0;
-            }
-            .param {
-                margin: 5px 0;
-            }
-            .param-name {
-                font-weight: bold;
-                color: #2c3e50;
-            }
-            .param-desc {
-                color: #666;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Namada API Documentation</h1>
-        
-        <h2>Health Endpoints</h2>
-        
-        <div class="endpoint">
-            <h3>Basic Health Check</h3>
-            <p><span class="method">GET</span> <span class="path">/api/health/api_status</span></p>
-            <p>Check if the API is running.</p>
-            <div class="response">
-                <h4>Response:</h4>
-                <pre><code>{
-    "status": "ok",
-    "version": "0.1.0"
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>RPC Health Check</h3>
-            <p><span class="method">GET</span> <span class="path">/api/health/rpc_status</span></p>
-            <p>Check if the RPC connection is working.</p>
-            <div class="response">
-                <h4>Success Response:</h4>
-                <pre><code>{
-    "status": "ok",
-    "rpc_url": "https://rpc-1.namada.nodes.guru"
-}</code></pre>
-                <h4>Error Response:</h4>
-                <pre><code>{
-    "status": "error",
-    "message": "RPC connection error: ...",
-    "rpc_url": "https://rpc-1.namada.nodes.guru"
-}</code></pre>
-            </div>
-        </div>
-
-        <h2>Proof of Stake Endpoints</h2>
-
-        <div class="endpoint">
-            <h3>Get Validator Liveness Information</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/liveness_info</span></p>
-            <p>Get liveness information for all validators.</p>
-            <div class="response">
-                <h4>Response:</h4>
-                <pre><code>{
-    "liveness_window_len": 100,
-    "liveness_threshold": "0.9",
-    "validators": [
-        {
-            "native_address": "tnam1q...",
-            "comet_address": "tnam1q...",
-            "missed_votes": 0
+    // Read the documentation from the external file
+    let docs_content = match std::fs::read_to_string("docs/api.html") {
+        Ok(content) => content,
+        Err(_) => {
+            // Fallback to a simple error message if file is not found
+            r#"
+            <!DOCTYPE html>
+            <html>
+            <head><title>Documentation Error</title></head>
+            <body>
+                <h1>Documentation Not Available</h1>
+                <p>The API documentation file could not be loaded.</p>
+                <p>Please ensure the <code>docs/api.html</code> file exists.</p>
+            </body>
+            </html>
+            "#.to_string()
         }
-    ]
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get Validator by Tendermint Address</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validator_by_tm_addr/{tm_addr}</span></p>
-            <p>Get validator information by their Tendermint address.</p>
-            <div class="params">
-                <div class="param">
-                    <span class="param-name">tm_addr</span>: <span class="param-desc">Tendermint address of the validator (40 hex characters)</span>
-                </div>
-            </div>
-            <div class="response">
-                <h4>Success Response:</h4>
-                <pre><code>{
-    "address": "tnam1q..."
-}</code></pre>
-                <h4>Error Responses:</h4>
-                <pre><code>{
-    "error": "Invalid Tendermint address",
-    "details": "Tendermint address must be 40 hex characters"
-}</code></pre>
-                <pre><code>{
-    "error": "Not found",
-    "details": "No validator found with Tendermint address CAFA..."
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get Validator Details</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validators/{address}</span></p>
-            <p>Get detailed information about a specific validator.</p>
-            <div class="params">
-                <div class="param">
-                    <span class="param-name">address</span>: <span class="param-desc">Namada address of the validator</span>
-                </div>
-            </div>
-            <div class="response">
-                <h4>Success Response:</h4>
-                <pre><code>{
-    "address": "tnam1q...",
-    "state": "active",
-    "stake": "1000000",
-    "commission_rate": "0.05",
-    "max_commission_change_per_epoch": "0.01",
-    "metadata": {
-        "email": "validator@example.com",
-        "description": "Professional validator",
-        "website": "https://example.com",
-        "discord_handle": "validator#1234"
-    }
-}</code></pre>
-                <h4>Error Responses:</h4>
-                <pre><code>{
-    "error": "Invalid address format",
-    "details": "Invalid address format: expected bech32m encoding"
-}</code></pre>
-                <pre><code>{
-    "error": "Not found",
-    "details": "Address tnam1q... is not a validator"
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get All Validators</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validators</span></p>
-            <p>Get a simple list of all validators. This endpoint returns just the addresses without additional details.</p>
-            <div class="response">
-                <h4>Response:</h4>
-                <pre><code>{
-    "validators": [
-        "tnam1q...",
-        "tnam1q..."
-    ]
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get All Validators with Details</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validators_details?page={page}&per_page={per_page}</span></p>
-            <p>Get detailed information about all validators with pagination.</p>
-            <div class="params">
-                <div class="param">
-                    <span class="param-name">page</span>: <span class="param-desc">Page number (default: 1, must be greater than 0)</span>
-                </div>
-                <div class="param">
-                    <span class="param-name">per_page</span>: <span class="param-desc">Number of validators per page (default: 10, max: 50)</span>
-                </div>
-            </div>
-            <div class="response">
-                <h4>Success Response:</h4>
-                <pre><code>{
-    "validators": [
-        {
-            "address": "tnam1q...",
-            "state": "active",
-            "stake": "1000000",
-            "commission_rate": "0.05",
-            "max_commission_change_per_epoch": "0.01",
-            "metadata": {
-                "email": "validator@example.com",
-                "description": "Professional validator",
-                "website": "https://example.com",
-                "discord_handle": "validator#1234"
-            }
-        }
-    ],
-    "pagination": {
-        "total": 100,
-        "page": 1,
-        "per_page": 10,
-        "total_pages": 10
-    }
-}</code></pre>
-                <h4>Error Responses:</h4>
-                <pre><code>{
-    "error": "Invalid pagination parameters",
-    "details": "Page number must be greater than 0"
-}</code></pre>
-                <pre><code>{
-    "error": "Invalid pagination parameters",
-    "details": "Items per page cannot exceed 50"
-}</code></pre>
-                <pre><code>{
-    "error": "Invalid pagination parameters",
-    "details": "Page number 11 exceeds total pages 10"
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get Consensus Validator Set</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/consensus</span></p>
-            <p>Get all validators in the consensus set with their bonded stake.</p>
-            <div class="response">
-                <h4>Response:</h4>
-                <pre><code>{
-    "validators": [
-        {
-            "address": "tnam1q...",
-            "stake": "1000000"
-        }
-    ]
-}</code></pre>
-            </div>
-        </div>
-
-        <div class="endpoint">
-            <h3>Get Below-Capacity Validator Set</h3>
-            <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/below_capacity</span></p>
-            <p>Get all validators in the below-capacity set with their bonded stake.</p>
-            <div class="response">
-                <h4>Response:</h4>
-                <pre><code>{
-    "validators": [
-        {
-            "address": "tnam1q...",
-            "stake": "1000000"
-        }
-    ]
-}</code></pre>
-            </div>
-        </div>
-    </body>
-    </html>
-    "#;
+    };
     
-    Ok(warp::reply::html(html))
+    Ok(warp::reply::html(docs_content))
 } 

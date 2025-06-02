@@ -35,6 +35,8 @@ pub struct ValidatorMetadata {
     pub description: Option<String>,
     pub website: Option<String>,
     pub discord_handle: Option<String>,
+    pub name: Option<String>,
+    pub avatar: Option<String>,
 }
 
 #[derive(Serialize)]
