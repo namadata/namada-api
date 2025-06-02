@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Namada API Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .endpoint {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .method {
+            font-weight: bold;
+            color: #2ecc71;
+        }
+        .path {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .response {
+            background: #f1f8e9;
+            border: 1px solid #dcedc8;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .error {
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .params {
+            margin: 10px 0;
+        }
+        .param {
+            margin: 5px 0;
+        }
+        .param-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .param-desc {
+            color: #666;
+        }
+        .new-field {
+            background: #e8f5e8;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Namada API Documentation</h1>
+    
+    <h2>Health Endpoints</h2>
+    
+    <div class="endpoint">
+        <h3>Basic Health Check</h3>
+        <p><span class="method">GET</span> <span class="path">/api/health/api_status</span></p>
+        <p>Check if the API is running.</p>
+        <div class="response">
+            <h4>Response:</h4>
+            <pre><code>{
+    "status": "ok",
+    "version": "0.1.0"
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>RPC Health Check</h3>
+        <p><span class="method">GET</span> <span class="path">/api/health/rpc_status</span></p>
+        <p>Check if the RPC connection is working.</p>
+        <div class="response">
+            <h4>Success Response:</h4>
+            <pre><code>{
+    "status": "ok",
+    "rpc_url": "https://rpc-1.namada.nodes.guru"
+}</code></pre>
+            <h4>Error Response:</h4>
+            <pre><code>{
+    "status": "error",
+    "message": "RPC connection error: ...",
+    "rpc_url": "https://rpc-1.namada.nodes.guru"
+}</code></pre>
+        </div>
+    </div>
+
+    <h2>Proof of Stake Endpoints</h2>
+
+    <div class="endpoint">
+        <h3>Get Validator Liveness Information</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/liveness_info</span></p>
+        <p>Get liveness information for all validators.</p>
+        <div class="response">
+            <h4>Response:</h4>
+            <pre><code>{
+    "liveness_window_len": 100,
+    "liveness_threshold": "0.9",
+    "validators": [
+        {
+            "native_address": "tnam1q...",
+            "comet_address": "CAFAD8DA813BAE48779A4219A74632D5DCA49737",
+            "missed_votes": 0
+        }
+    ]
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get Validator by Tendermint Address</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validator_by_tm_addr/{tm_addr}</span></p>
+        <p>Get validator information by their Tendermint address.</p>
+        <div class="params">
+            <div class="param">
+                <span class="param-name">tm_addr</span>: <span class="param-desc">Tendermint address of the validator (40 hex characters)</span>
+            </div>
+        </div>
+        <div class="response">
+            <h4>Success Response:</h4>
+            <pre><code>{
+    "address": "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3"
+}</code></pre>
+            <h4>Error Responses:</h4>
+            <pre><code>{
+    "error": "Invalid Tendermint address format",
+    "details": "Invalid Tendermint address format: INVALID. Expected 40 hex characters."
+}</code></pre>
+            <pre><code>{
+    "error": "Not found",
+    "details": "No validator found with Tendermint address: CAFAD8DA813BAE48779A4219A74632D5DCA49737"
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get Validator Details</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validator_details/{address}</span></p>
+        <p>Get detailed information about a specific validator.</p>
+        <div class="params">
+            <div class="param">
+                <span class="param-name">address</span>: <span class="param-desc">Namada address of the validator</span>
+            </div>
+        </div>
+        <div class="response">
+            <h4>Success Response:</h4>
+            <pre><code>{
+    "address": "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3",
+    "state": "active",
+    "stake": "1000000",
+    "commission_rate": "0.05",
+    "max_commission_change_per_epoch": "0.01",
+    "metadata": {
+        "email": "validator@example.com",
+        "description": "Professional validator service",
+        "website": "https://example.com",
+        "discord_handle": "validator#1234",
+        <span class="new-field">"name": "My Validator"</span>
+    }
+}</code></pre>
+            <h4>Error Responses:</h4>
+            <pre><code>{
+    "error": "Invalid address format",
+    "details": "Invalid address format: expected bech32m encoding"
+}</code></pre>
+            <pre><code>{
+    "error": "Not found",
+    "details": "Address tnam1q... is not a validator"
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get All Validators</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validators</span></p>
+        <p>Get a simple list of all validators. This endpoint returns just the addresses without additional details.</p>
+        <div class="response">
+            <h4>Response:</h4>
+            <pre><code>{
+    "validators": [
+        "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3",
+        "tnam1q9vhfdur7gadtwx4r223agpal0fpc0vjam8h8kgnv9c78k"
+    ]
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get All Validators with Details</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validators_details?page={page}&per_page={per_page}</span></p>
+        <p>Get detailed information about all validators with pagination.</p>
+        <div class="params">
+            <div class="param">
+                <span class="param-name">page</span>: <span class="param-desc">Page number (default: 1, must be greater than 0)</span>
+            </div>
+            <div class="param">
+                <span class="param-name">per_page</span>: <span class="param-desc">Number of validators per page (default: 10, max: 50)</span>
+            </div>
+        </div>
+        <div class="response">
+            <h4>Success Response:</h4>
+            <pre><code>{
+    "validators": [
+        {
+            "address": "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3",
+            "state": "active",
+            "stake": "1000000",
+            "commission_rate": "0.05",
+            "max_commission_change_per_epoch": "0.01",
+            "metadata": {
+                "email": "validator@example.com",
+                "description": "Professional validator service",
+                "website": "https://example.com",
+                "discord_handle": "validator#1234",
+                <span class="new-field">"name": "My Validator"</span>
+            }
+        }
+    ],
+    "pagination": {
+        "total": 100,
+        "page": 1,
+        "per_page": 10,
+        "total_pages": 10
+    }
+}</code></pre>
+            <h4>Error Responses:</h4>
+            <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Page number must be greater than 0"
+}</code></pre>
+            <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Items per page cannot exceed 50"
+}</code></pre>
+            <pre><code>{
+    "error": "Invalid pagination parameters",
+    "details": "Page number 11 exceeds total pages 10"
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get Consensus Validator Set</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/consensus</span></p>
+        <p>Get all validators in the consensus set with their bonded stake.</p>
+        <div class="response">
+            <h4>Response:</h4>
+            <pre><code>{
+    "validators": [
+        {
+            "address": "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3",
+            "stake": "1000000"
+        },
+        {
+            "address": "tnam1q9vhfdur7gadtwx4r223agpal0fpc0vjam8h8kgnv9c78k",
+            "stake": "950000"
+        }
+    ]
+}</code></pre>
+        </div>
+    </div>
+
+    <div class="endpoint">
+        <h3>Get Below-Capacity Validator Set</h3>
+        <p><span class="method">GET</span> <span class="path">/api/pos/validator_set/below_capacity</span></p>
+        <p>Get all validators in the below-capacity set with their bonded stake.</p>
+        <div class="response">
+            <h4>Response:</h4>
+            <pre><code>{
+    "validators": [
+        {
+            "address": "tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3",
+            "stake": "500000"
+        }
+    ]
+}</code></pre>
+        </div>
+    </div>
+
+    <h2>Field Descriptions</h2>
+    
+    <div class="endpoint">
+        <h3>Validator Metadata Fields</h3>
+        <p>The metadata object in validator responses contains the following fields:</p>
+        <div class="params">
+            <div class="param">
+                <span class="param-name">email</span>: <span class="param-desc">Validator's contact email (required)</span>
+            </div>
+            <div class="param">
+                <span class="param-name">description</span>: <span class="param-desc">Optional description of the validator service</span>
+            </div>
+            <div class="param">
+                <span class="param-name">website</span>: <span class="param-desc">Optional validator website URL</span>
+            </div>
+            <div class="param">
+                <span class="param-name">discord_handle</span>: <span class="param-desc">Optional Discord username for contact</span>
+            </div>
+            <div class="param">
+                <span class="param-name new-field">name</span>: <span class="param-desc">Optional human-readable name for the validator</span>
+            </div>
+        </div>
+        <p><em>Note: All fields except email are optional and may be null.</em></p>
+    </div>
+
+    <h2>Error Handling</h2>
+    
+    <div class="endpoint">
+        <h3>Common Error Response Format</h3>
+        <p>All API errors follow this consistent format:</p>
+        <div class="error">
+            <pre><code>{
+    "error": "Error type description",
+    "details": "Specific error details (optional)"
+}</code></pre>
+        </div>
+        
+        <h4>Common HTTP Status Codes:</h4>
+        <ul>
+            <li><strong>400 Bad Request</strong>: Invalid input parameters</li>
+            <li><strong>404 Not Found</strong>: Resource not found</li>
+            <li><strong>500 Internal Server Error</strong>: Server or RPC connection issues</li>
+        </ul>
+    </div>
+</body>
+</html> 
