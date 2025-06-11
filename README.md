@@ -14,6 +14,10 @@ This API serves as a bridge between the Namada blockchain and web applications, 
   - Validator lookup and details
   - Delegation information
   - Comprehensive validator listing
+- Token API implementation
+  - Token balance queries
+  - Token total supply information
+  - Native token address lookup
 - Health monitoring endpoints
 - Production-ready configuration management
 - Error handling
@@ -140,6 +144,11 @@ docker run namada-api
 - `GET /api/pos/validator_set/consensus` — Consensus validator set
 - `GET /api/pos/validator_set/below_capacity` — Below-capacity validator set
 
+### Token
+- `GET /api/token/balance?token={token}&owner={owner}&height={height}` — Get token balance for an owner
+- `GET /api/token/total_supply/{token}` — Get total supply of a token
+- `GET /api/token/native` — Get the native token address
+
 ## Client Libraries
 
 ### Python
@@ -186,6 +195,21 @@ class NamadaClient:
     def get_below_capacity_validator_set(self):
         """Get below-capacity validator set"""
         return requests.get(f"{self.base_url}/pos/validator_set/below_capacity").json()
+    
+    def get_token_balance(self, token, owner, height=None):
+        """Get token balance for an owner"""
+        params = {"token": token, "owner": owner}
+        if height:
+            params["height"] = height
+        return requests.get(f"{self.base_url}/token/balance", params=params).json()
+    
+    def get_token_total_supply(self, token):
+        """Get total supply of a token"""
+        return requests.get(f"{self.base_url}/token/total_supply/{token}").json()
+    
+    def get_native_token(self):
+        """Get the native token address"""
+        return requests.get(f"{self.base_url}/token/native").json()
 
 # Example usage
 client = NamadaClient()
@@ -197,6 +221,14 @@ print(client.check_rpc_health())
 # Get validator information
 validators = client.get_validators()
 print(f"Found {len(validators['validators'])} validators")
+
+# Get token information
+native_token = client.get_native_token()
+print(f"Native token: {native_token['address']}")
+
+# Get token balance
+# balance = client.get_token_balance("tnam1q...", "tnam1q...")
+# print(f"Token balance: {balance['balance']}")
 
 # Get detailed validator information with pagination
 details = client.get_validators_details(page=1, per_page=5)
@@ -222,6 +254,23 @@ class NamadaClient {
 
     async getValidatorsDetails(page = 1, perPage = 10) {
         const response = await fetch(`${this.baseUrl}/pos/validators_details?page=${page}&per_page=${perPage}`);
+        return response.json();
+    }
+
+    async getTokenBalance(token, owner, height = null) {
+        const params = new URLSearchParams({ token, owner });
+        if (height) params.append('height', height);
+        const response = await fetch(`${this.baseUrl}/token/balance?${params}`);
+        return response.json();
+    }
+
+    async getTokenTotalSupply(token) {
+        const response = await fetch(`${this.baseUrl}/token/total_supply/${token}`);
+        return response.json();
+    }
+
+    async getNativeToken() {
+        const response = await fetch(`${this.baseUrl}/token/native`);
         return response.json();
     }
 }
@@ -262,6 +311,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Roadmap
 
+- [x] Token API implementation (balance, supply, native token)
 - [ ] Additional Namada SDK endpoints (governance, IBC, etc.)
 - [ ] Docker container and Kubernetes manifests
 - [ ] Comprehensive test suite

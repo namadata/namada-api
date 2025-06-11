@@ -3,6 +3,7 @@ use tracing::{error, info};
 use tendermint_rpc::{HttpClient, Url};
 use namada_core::address::Address;
 use namada_core::chain::Epoch;
+use namada_core::chain::BlockHeight;
 use namada_proof_of_stake::types::{LivenessInfo, ValidatorMetaData, CommissionPair, ValidatorStateInfo};
 use namada_sdk::rpc;
 use namada_sdk::queries::RPC;
@@ -193,6 +194,50 @@ impl NamadaClient {
         spawn_blocking(move || {
             tokio::runtime::Handle::current().block_on(async {
                 RPC.vp().pos().validator_by_tm_addr(&client, &tm_addr).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+    }
+
+    // Token-related methods
+    
+    /// Get token balance for a specific owner
+    pub async fn get_token_balance(&self, token: &Address, owner: &Address, height: Option<BlockHeight>) -> Result<namada_core::token::Amount, ClientError> {
+        let client = self.rpc_client.clone();
+        let token = token.clone();
+        let owner = owner.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_token_balance(&client, &token, &owner, height).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+    }
+
+    /// Get total supply of a token
+    pub async fn get_token_total_supply(&self, token: &Address) -> Result<namada_core::token::Amount, ClientError> {
+        let client = self.rpc_client.clone();
+        let token = token.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::get_token_total_supply(&client, &token).await
+            })
+        })
+        .await
+        .map_err(|e| ClientError::QueryError(e.to_string()))?
+        .map_err(|e| ClientError::QueryError(e.to_string()))
+    }
+
+    /// Get the native token address
+    pub async fn query_native_token(&self) -> Result<Address, ClientError> {
+        let client = self.rpc_client.clone();
+        spawn_blocking(move || {
+            tokio::runtime::Handle::current().block_on(async {
+                rpc::query_native_token(&client).await
             })
         })
         .await

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use warp::{Filter, Rejection, Reply};
 use tracing::{info, error};
 use namada_core::address::Address;
+use namada_core::chain::BlockHeight;
 use std::str::FromStr;
 use std::convert::Infallible;
 use clap::Parser;
@@ -14,6 +15,7 @@ mod config;
 mod tests;
 
 use models::pos::*;
+use models::token::*;
 use models::error::{ApiError, handle_rejection};
 use config::{CliArgs, Config};
 
@@ -147,6 +149,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and(warp::get())
         .and(with_state(state.clone()))
         .and_then(get_below_capacity_validator_set);
+
+    // Token routes
+    let token_balance = warp::path("api")
+        .and(warp::path("token"))
+        .and(warp::path("balance"))
+        .and(warp::get())
+        .and(warp::query::<TokenBalanceQuery>())
+        .and(with_state(state.clone()))
+        .and_then(|query: TokenBalanceQuery, state: Arc<AppState>| async move {
+            get_token_balance(state, query).await
+        });
+
+    let token_total_supply = warp::path("api")
+        .and(warp::path("token"))
+        .and(warp::path("total_supply"))
+        .and(warp::path::param::<String>())
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(|token: String, state: Arc<AppState>| async move {
+            get_token_total_supply(state, token).await
+        });
+
+    let native_token = warp::path("api")
+        .and(warp::path("token"))
+        .and(warp::path("native"))
+        .and(warp::get())
+        .and(with_state(state.clone()))
+        .and_then(get_native_token);
     
     // Combine all routes
     let routes = docs
@@ -159,6 +189,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or(validators_details)
         .or(consensus_validator_set)
         .or(below_capacity_validator_set)
+        .or(token_balance)
+        .or(token_total_supply)
+        .or(native_token)
         .with(warp::cors().allow_any_origin())
         .recover(handle_rejection);
     
@@ -596,6 +629,107 @@ async fn get_below_capacity_validator_set(state: Arc<AppState>) -> Result<impl R
     };
     
     Ok(warp::reply::json(&response))
+}
+
+/// Get token balance
+/// 
+/// # Endpoint
+/// `GET /api/token/balance?token={token}&owner={owner}&height={height}`
+/// 
+/// # Parameters
+/// - `token`: Token address
+/// - `owner`: Owner address
+/// - `height`: Optional block height
+/// 
+/// # Response
+/// ```json
+/// {
+///     "token": "tnam1q...",
+///     "owner": "tnam1q...",
+///     "balance": "1000000",
+///     "height": 12345
+/// }
+/// ```
+async fn get_token_balance(
+    state: Arc<AppState>,
+    query: TokenBalanceQuery,
+) -> Result<impl Reply, Rejection> {
+    // Validate query parameters
+    query.validate()?;
+    
+    // Parse addresses
+    let token = Address::from_str(&query.token)
+        .map_err(|e| warp::reject::custom(ApiError::InvalidAddress(format!("Invalid token address: {}", e))))?;
+    let owner = Address::from_str(&query.owner)
+        .map_err(|e| warp::reject::custom(ApiError::InvalidAddress(format!("Invalid owner address: {}", e))))?;
+    
+    // Convert height if provided
+    let height = query.height.map(|h| BlockHeight(h));
+    
+    // Query balance
+    let balance = state.namada_client.get_token_balance(&token, &owner, height).await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    Ok(warp::reply::json(&TokenBalanceResponse {
+        token: query.token,
+        owner: query.owner,
+        balance: balance.to_string(),
+        height: query.height,
+    }))
+}
+
+/// Get token total supply
+/// 
+/// # Endpoint
+/// `GET /api/token/total_supply/{token}`
+/// 
+/// # Parameters
+/// - `token`: Token address
+/// 
+/// # Response
+/// ```json
+/// {
+///     "token": "tnam1q...",
+///     "total_supply": "1000000000"
+/// }
+/// ```
+async fn get_token_total_supply(
+    state: Arc<AppState>,
+    token: String,
+) -> Result<impl Reply, Rejection> {
+    // Parse token address
+    let token_addr = Address::from_str(&token)
+        .map_err(|e| warp::reject::custom(ApiError::InvalidAddress(format!("Invalid token address: {}", e))))?;
+    
+    // Query total supply
+    let total_supply = state.namada_client.get_token_total_supply(&token_addr).await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    Ok(warp::reply::json(&TokenTotalSupplyResponse {
+        token,
+        total_supply: total_supply.to_string(),
+    }))
+}
+
+/// Get native token address
+/// 
+/// # Endpoint
+/// `GET /api/token/native`
+/// 
+/// # Response
+/// ```json
+/// {
+///     "address": "tnam1q..."
+/// }
+/// ```
+async fn get_native_token(state: Arc<AppState>) -> Result<impl Reply, Rejection> {
+    // Query native token address
+    let native_token = state.namada_client.query_native_token().await
+        .map_err(|e| warp::reject::custom(ApiError::QueryError(e.to_string())))?;
+    
+    Ok(warp::reply::json(&NativeTokenResponse {
+        address: native_token.to_string(),
+    }))
 }
 
 /// Serve API documentation

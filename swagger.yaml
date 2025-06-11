@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Namada API
-  description: API for interacting with the Namada blockchain, providing access to validator and proof-of-stake information.
+  description: API for interacting with the Namada blockchain, providing access to validator, proof-of-stake, and token information.
   version: 0.1.0
   contact:
     name: Namadata 
@@ -295,6 +295,111 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/token/balance:
+    get:
+      summary: Get token balance
+      description: Retrieve the token balance for a specific owner address
+      operationId: getTokenBalance
+      tags:
+        - Token
+      parameters:
+        - name: token
+          in: query
+          description: Token address
+          required: true
+          schema:
+            type: string
+            example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        - name: owner
+          in: query
+          description: Owner address
+          required: true
+          schema:
+            type: string
+            example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        - name: height
+          in: query
+          description: Optional block height
+          required: false
+          schema:
+            type: integer
+            example: 12345
+      responses:
+        '200':
+          description: Token balance information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenBalanceResponse'
+        '400':
+          description: Invalid address or parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/token/total_supply/{token}:
+    get:
+      summary: Get token total supply
+      description: Retrieve the total supply of a specific token
+      operationId: getTokenTotalSupply
+      tags:
+        - Token
+      parameters:
+        - name: token
+          in: path
+          description: Token address
+          required: true
+          schema:
+            type: string
+            example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+      responses:
+        '200':
+          description: Token total supply information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenTotalSupplyResponse'
+        '400':
+          description: Invalid token address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/token/native:
+    get:
+      summary: Get native token address
+      description: Retrieve the native token address of the Namada chain
+      operationId: getNativeToken
+      tags:
+        - Token
+      responses:
+        '200':
+          description: Native token address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NativeTokenResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     ErrorResponse:
@@ -486,10 +591,62 @@ components:
         - address
         - stake
 
+    TokenBalanceResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Token address
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        owner:
+          type: string
+          description: Owner address
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        balance:
+          type: string
+          description: Token balance amount
+          example: "1000000"
+        height:
+          type: integer
+          description: Block height at which the balance was queried
+          nullable: true
+          example: 12345
+      required:
+        - token
+        - owner
+        - balance
+
+    TokenTotalSupplyResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Token address
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+        total_supply:
+          type: string
+          description: Total supply amount
+          example: "1000000000"
+      required:
+        - token
+        - total_supply
+
+    NativeTokenResponse:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Native token address
+          example: tnam1q0snjs4eum5yjvkpm5xqpmy9dgnpf9hcldg2l3
+      required:
+        - address
+
 tags:
   - name: Health
     description: Health check endpoints
   - name: Documentation
     description: API documentation endpoints
   - name: Proof of Stake
-    description: Proof of stake related endpoints 
+    description: Proof of stake related endpoints
+  - name: Token
+    description: Token related endpoints for balance, supply, and native token queries 
